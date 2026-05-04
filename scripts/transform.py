@@ -98,9 +98,34 @@ def build_spend() -> pd.DataFrame:
     return spend
 
 
+def _load_aggregated_leads() -> pd.DataFrame:
+    """Load monthly aggregated Lead counts from data/manual/_leads_monthly.csv.
+
+    The file contains pre-aggregated monthly totals per deal_channel sourced from
+    the HubSpot Lead report (filter: hs_object_source_label != 'Sales Extension').
+    We bucket each month's total onto a single mid-month week so it appears in
+    the right monthly bucket without needing to paginate 42K raw contact rows.
+    """
+    path = ROOT_MANUAL = Path(__file__).resolve().parent.parent / "data" / "manual" / "_leads_monthly.csv"
+    if not path.exists():
+        return pd.DataFrame(columns=["deal_channel", "deal_sub_channel", "week", "segment", "leads"])
+    df = pd.read_csv(path)
+    if df.empty:
+        return pd.DataFrame(columns=["deal_channel", "deal_sub_channel", "week", "segment", "leads"])
+    # Place the entire month's leads on a single mid-month Sunday so it always
+    # bucks correctly when grouped by month (and the dashboard pivot can show
+    # weekly with a single non-zero week per month).
+    df["week"] = df["month"].apply(lambda m: f"{m}-15").apply(lambda d: week_floor(d))
+    df["deal_sub_channel"] = "(unattributed)"
+    df["segment"] = "Non-ENT"
+    df["leads"] = df["leads"].astype(int)
+    return df[["deal_channel", "deal_sub_channel", "week", "segment", "leads"]]
+
+
 def build_pipeline() -> pd.DataFrame:
     contacts = _read_csv(RAW / "hubspot_contacts.csv")
     deals = _read_csv(RAW / "hubspot_deals.csv")
+    leads_agg = _load_aggregated_leads()
 
     cols = ["deal_channel", "deal_sub_channel", "week", "segment",
             "leads", "mqls", "s1", "s2", "cw", "arr", "s2_amount"]
@@ -189,7 +214,13 @@ def build_pipeline() -> pd.DataFrame:
         s2_agg = pd.DataFrame(columns=["deal_channel", "deal_sub_channel", "week", "segment", "s2", "s2_amount"])
         cw_agg = pd.DataFrame(columns=["deal_channel", "deal_sub_channel", "week", "segment", "cw", "arr"])
 
-    pipeline = contact_agg
+    # Override the (over-counted) lead column from contact_agg with aggregated
+    # Lead totals from the manual Lead report.
+    if "leads" in contact_agg.columns:
+        contact_agg = contact_agg.drop(columns=["leads"])
+    pipeline = contact_agg.merge(
+        leads_agg, on=["deal_channel", "deal_sub_channel", "week", "segment"], how="outer"
+    )
     for other in (s1_agg, s2_agg, cw_agg):
         pipeline = pipeline.merge(other, on=["deal_channel", "deal_sub_channel", "week", "segment"], how="outer")
     for col in ["leads", "mqls", "s1", "s2", "cw"]:

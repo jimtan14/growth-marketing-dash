@@ -125,10 +125,12 @@ def build_pipeline() -> pd.DataFrame:
             lambda d: week_floor(d) if pd.notna(d) else None
         )
         contacts["segment"] = "Non-ENT"
-        # Since we pulled only contacts with date_entered_MQL set, all are MQLs.
-        # Treat MQLs as also being leads (leads >= MQLs).
+        # We only pulled contacts with hs_v2_date_entered_marketingqualifiedlead populated,
+        # so every row is by definition an MQL.
         contacts["is_mql"] = 1
-        contacts["is_lead"] = 1
+        # Lead count requires a separate pull on hs_v2_date_entered_lead — until that
+        # lands, do NOT inflate Lead by re-counting MQLs as leads.
+        contacts["is_lead"] = 0
         contact_agg = contacts.groupby(
             ["deal_channel", "deal_sub_channel", "week", "segment"], dropna=False
         ).agg(leads=("is_lead", "sum"), mqls=("is_mql", "sum")).reset_index()

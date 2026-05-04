@@ -204,41 +204,35 @@
   <div class="date-pill">Date Range: <strong id="date-range">—</strong></div>
 </div>
 
-<div class="filter-bar" style="display:flex; gap:14px; align-items:end; margin-bottom:14px; padding:14px 18px;">
-  <div class="field" style="max-width:220px;">
+<div class="filter-bar">
+  <div class="field">
     <label for="filter-groupby">Grouped By</label>
     <select id="filter-groupby">
       <option value="create_date">Create Date</option>
       <option value="event_date">Event Date</option>
     </select>
   </div>
-</div>
-
-<div class="filter-bar" style="display:flex; gap:14px; align-items:end; margin-bottom:14px; padding:14px 18px;">
-  <div class="field" style="max-width:220px;">
+  <div class="field">
     <label for="filter-from">From</label>
     <input type="date" id="filter-from">
   </div>
-  <div class="field" style="max-width:220px;">
+  <div class="field">
     <label for="filter-to">To</label>
     <input type="date" id="filter-to">
   </div>
-  <div class="field" style="max-width:240px;">
+  <div class="field">
     <label>Source</label>
-    <div id="filter-source" class="checkbox-group" style="display:flex; flex-wrap:wrap; gap:6px 12px; padding:8px 10px; border:1px solid var(--stroke-primary); border-radius:7px; background:#fff; min-height:38px;"></div>
+    <div id="filter-source" class="checkbox-group" style="display:flex; flex-wrap:wrap; gap:6px 12px; padding:8px 10px; border:1px solid var(--stroke-primary); border-radius:7px; background:#fff; min-height:38px; max-height:120px; overflow-y:auto;"></div>
   </div>
-  <button class="reset-btn" id="filter-reset" style="margin-left:auto;">Reset</button>
-</div>
-
-<div class="filter-bar" style="display:grid; grid-template-columns: 1fr 1fr; gap:14px; align-items:start; margin-bottom:18px; padding:14px 18px;">
   <div class="field">
     <label>Deal Channel</label>
-    <div id="filter-channel" class="checkbox-group" style="display:flex; flex-wrap:wrap; gap:6px 14px; padding:10px 12px; border:1px solid var(--stroke-primary); border-radius:7px; background:#fff; min-height:38px; max-height:140px; overflow-y:auto;"></div>
+    <div id="filter-channel" class="checkbox-group" style="display:flex; flex-wrap:wrap; gap:6px 12px; padding:8px 10px; border:1px solid var(--stroke-primary); border-radius:7px; background:#fff; min-height:38px; max-height:120px; overflow-y:auto;"></div>
   </div>
   <div class="field">
     <label>Deal Sub-Channel</label>
-    <div id="filter-subchannel" class="checkbox-group" style="display:flex; flex-wrap:wrap; gap:6px 14px; padding:10px 12px; border:1px solid var(--stroke-primary); border-radius:7px; background:#fff; min-height:38px; max-height:140px; overflow-y:auto;"></div>
+    <div id="filter-subchannel" class="checkbox-group" style="display:flex; flex-wrap:wrap; gap:6px 12px; padding:8px 10px; border:1px solid var(--stroke-primary); border-radius:7px; background:#fff; min-height:38px; max-height:120px; overflow-y:auto;"></div>
   </div>
+  <button class="reset-btn" id="filter-reset">Reset</button>
 </div>
 
 <div class="kpi-grid">

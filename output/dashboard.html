@@ -119,7 +119,7 @@
     /* KPI tiles */
     .kpi-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      grid-template-columns: repeat(8, 1fr);
       gap: 14px;
       margin-bottom: 14px;
     }
@@ -259,7 +259,9 @@
   </div>
   <div class="field">
     <label>Source</label>
-    <div id="filter-source" class="checkbox-group" style="display:flex; flex-direction:column; gap:6px; padding:10px 12px; border:1px solid var(--stroke-primary); border-radius:7px; background:#fff; min-height:38px;"></div>
+    <div id="filter-source" class="checkbox-group" style="display:flex; flex-direction:column; gap:6px; padding:10px 12px; border:1px solid var(--stroke-primary); border-radius:7px; background:#fff; min-height:38px; margin-bottom:10px;"></div>
+    <label>Paid vs. Unpaid</label>
+    <div id="filter-paid" class="checkbox-group" style="display:flex; flex-direction:column; gap:6px; padding:10px 12px; border:1px solid var(--stroke-primary); border-radius:7px; background:#fff; min-height:38px;"></div>
   </div>
   <div class="field">
     <label>Deal Channel</label>
@@ -273,6 +275,7 @@
 </div>
 
 <div class="kpi-grid">
+  <!-- Row 1: counts (cols 1-8) -->
   <div class="kpi"><div class="v" id="kpi-cost">—</div><div class="l">Cost</div></div>
   <div class="kpi"><div class="v" id="kpi-impr">—</div><div class="l">Impressions</div></div>
   <div class="kpi"><div class="v" id="kpi-clicks">—</div><div class="l">Clicks</div></div>
@@ -281,18 +284,20 @@
   <div class="kpi"><div class="v" id="kpi-demo">—</div><div class="l">S1</div></div>
   <div class="kpi"><div class="v" id="kpi-oppty">—</div><div class="l">S2</div></div>
   <div class="kpi"><div class="v" id="kpi-cw">—</div><div class="l">CW</div></div>
+  <!-- Row 2: rates (cols 1-5) + S2 Deal Amount (cols 6-7, span 2) -->
   <div class="kpi"><div class="v" id="kpi-ctr">—</div><div class="l">CTR</div></div>
   <div class="kpi"><div class="v" id="kpi-mqlcvr">—</div><div class="l">MQL CVR</div></div>
   <div class="kpi"><div class="v" id="kpi-mqldemo">—</div><div class="l">MQL → S1 CVR</div></div>
   <div class="kpi"><div class="v" id="kpi-s1s2">—</div><div class="l">S1 → S2 CVR</div></div>
   <div class="kpi"><div class="v" id="kpi-s2cw">—</div><div class="l">S2 → CW CVR</div></div>
-  <div class="kpi"><div class="v" id="kpi-s2amt">—</div><div class="l">S2 Deal Amount</div></div>
-  <div class="kpi" style="grid-column: span 2;"><div class="v" id="kpi-cwarr">—</div><div class="l">CW ARR</div></div>
-  <div class="kpi"><div class="v" id="kpi-cpmql">—</div><div class="l">CPMQL</div></div>
+  <div class="kpi" style="grid-column: 6 / span 2;"><div class="v" id="kpi-s2amt">—</div><div class="l">S2 Deal Amount</div></div>
+  <!-- Row 3: efficiency (cols 1-5, force new row) + CW ARR (cols 6-7, span 2, directly below S2 Deal Amount) -->
+  <div class="kpi" style="grid-column-start: 1;"><div class="v" id="kpi-cpmql">—</div><div class="l">CPMQL</div></div>
   <div class="kpi"><div class="v" id="kpi-cps1">—</div><div class="l">CPS1</div></div>
   <div class="kpi"><div class="v" id="kpi-cps2">—</div><div class="l">CPS2</div></div>
   <div class="kpi"><div class="v" id="kpi-cpcw">—</div><div class="l">CPCW</div></div>
   <div class="kpi"><div class="v" id="kpi-roi">—</div><div class="l">ROI</div></div>
+  <div class="kpi" style="grid-column: 6 / span 2;"><div class="v" id="kpi-cwarr">—</div><div class="l">CW ARR</div></div>
 </div>
 
 <div class="table-card">
@@ -37559,13 +37564,19 @@
     'Paid Search', 'Paid Social', 'Referral', 'Other',
   ]);
 
+  // Channels considered "Paid"
+  const PAID_CHANNELS = new Set([
+    'Paid Search', 'Paid Social', 'Paid Display', 'Paid AI Search', 'Offline Advertising',
+  ]);
+
   // Remap any non-HubSpot deal_channel value to "Other" so the dashboard always
-  // shows the canonical 16-value taxonomy.
+  // shows the canonical 16-value taxonomy. Also derive source + paid flag.
   data.rows.forEach(r => {
     if (!r.deal_channel || !HUBSPOT_DEAL_CHANNELS_SET.has(r.deal_channel)) {
       r.deal_channel = 'Other';
     }
     r.source = (r.deal_channel === 'Outbound') ? 'Outbound' : 'Inbound';
+    r.paid = PAID_CHANNELS.has(r.deal_channel) ? 'Paid' : 'Unpaid';
   });
 
   function num(x) { if (x === null || x === undefined || Number.isNaN(x)) return '—'; return Number(x).toLocaleString(); }
@@ -37614,9 +37625,11 @@
     }).join('');
   }
   const sourceSel = document.getElementById('filter-source');
+  const paidSel = document.getElementById('filter-paid');
   const channelSel = document.getElementById('filter-channel');
   const subSel = document.getElementById('filter-subchannel');
   fillCheckboxes(sourceSel, 'cb-source', allSources);
+  fillCheckboxes(paidSel, 'cb-paid', ['Paid', 'Unpaid']);
   fillCheckboxes(channelSel, 'cb-channel', allChannels);
   fillCheckboxes(subSel, 'cb-subchannel', allSubChannels);
   const pivotChanSel = document.getElementById('pivot-channels');
@@ -37638,12 +37651,14 @@
     const from = fromInput.value;
     const to = toInput.value;
     const srcs = selected(sourceSel);
+    const paids = selected(paidSel);
     const chans = selected(channelSel);
     const subs = selected(subSel);
     return data.rows.filter(r => {
       if (from && r.week && r.week < from) return false;
       if (to && r.week && r.week > to) return false;
       if (srcs.length && !srcs.includes(r.source)) return false;
+      if (paids.length && !paids.includes(r.paid)) return false;
       if (chans.length && !chans.includes(r.deal_channel)) return false;
       if (subs.length && !subs.includes(r.deal_sub_channel)) return false;
       return true;
@@ -37651,7 +37666,7 @@
   }
 
   function totals(rows) {
-    const t = { impressions: 0, clicks: 0, spend: 0, leads: 0, mqls: 0, s1: 0, s2: 0, cw: 0, arr: 0 };
+    const t = { impressions: 0, clicks: 0, spend: 0, leads: 0, mqls: 0, s1: 0, s2: 0, cw: 0, arr: 0, s2_amount: 0 };
     rows.forEach(r => {
       t.impressions += r.impressions || 0;
       t.clicks += r.clicks || 0;
@@ -37662,6 +37677,7 @@
       t.s2 += r.s2 || 0;
       t.cw += r.cw || 0;
       t.arr += r.arr || 0;
+      t.s2_amount += r.s2_amount || 0;
     });
     // Oppty pipeline = pipeline value from S1+S2 stages (we approximate using arr field as deal amount sum).
     // For a proper "pipeline value" we'd want sum of amount across all open deals; using arr (closed-won amount) is a placeholder.
@@ -38007,13 +38023,13 @@
      document.getElementById('drill-window')].forEach(el => el && el.addEventListener(evt, rerender));
   });
   // Delegated listeners for checkbox-group filters and pivot metric/channel checkboxes
-  [sourceSel, channelSel, subSel, document.getElementById('pivot-channels')].forEach(c => c && c.addEventListener('change', rerender));
+  [sourceSel, paidSel, channelSel, subSel, document.getElementById('pivot-channels')].forEach(c => c && c.addEventListener('change', rerender));
   document.querySelectorAll('input[name="pivot-metric"]').forEach(cb => cb.addEventListener('change', rerender));
 
   document.getElementById('filter-reset').addEventListener('click', () => {
     fromInput.value = minWeek || '';
     toInput.value = maxWeek || '';
-    [sourceSel, channelSel, subSel].forEach(c => c.querySelectorAll('input[type="checkbox"]').forEach(b => b.checked = false));
+    [sourceSel, paidSel, channelSel, subSel].forEach(c => c.querySelectorAll('input[type="checkbox"]').forEach(b => b.checked = false));
     document.getElementById('filter-groupby').value = 'create_date';
     rerender();
   });

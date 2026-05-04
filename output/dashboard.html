@@ -240,8 +240,8 @@
   <div class="kpi"><div class="v" id="kpi-impr">—</div><div class="l">Impressions</div></div>
   <div class="kpi"><div class="v" id="kpi-clicks">—</div><div class="l">Clicks</div></div>
   <div class="kpi"><div class="v" id="kpi-mql">—</div><div class="l">MQL</div></div>
-  <div class="kpi"><div class="v" id="kpi-demo">—</div><div class="l">Demo</div></div>
-  <div class="kpi"><div class="v" id="kpi-oppty">—</div><div class="l">Oppty Pipeline</div></div>
+  <div class="kpi"><div class="v" id="kpi-demo">—</div><div class="l">S1</div></div>
+  <div class="kpi"><div class="v" id="kpi-oppty">—</div><div class="l">S2</div></div>
 </div>
 
 <div class="kpi-grid">
@@ -6059,8 +6059,8 @@
     document.getElementById('kpi-impr').textContent = num(t.impressions);
     document.getElementById('kpi-clicks').textContent = num(t.clicks);
     document.getElementById('kpi-mql').textContent = num(t.mqls);
-    document.getElementById('kpi-demo').textContent = num(t.s2);
-    document.getElementById('kpi-oppty').textContent = money(t.oppty_pipeline);
+    document.getElementById('kpi-demo').textContent = num(t.s1);
+    document.getElementById('kpi-oppty').textContent = num(t.s2);
     document.getElementById('kpi-ctr').textContent = pct(t.CTR);
     document.getElementById('kpi-mqlcvr').textContent = pct(t.MQL_CVR);
     document.getElementById('kpi-mqldemo').textContent = pct(t.MQL_S1);

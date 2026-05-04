@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Pipeline Reporting Dashboard</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 24px; background: #f7f7f9; color: #222; }
+    h1 { margin-bottom: 4px; }
+    .subtitle { color: #666; margin-bottom: 24px; }
+    .panel { background: #fff; border: 1px solid #e3e3e7; border-radius: 8px; padding: 16px; margin-bottom: 24px; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
+    .alerts { margin-bottom: 8px; }
+    .alert { padding: 6px 10px; border-radius: 4px; margin-bottom: 4px; font-size: 13px; }
+    .alert.red { background: #fde2e2; color: #8b0000; border-left: 4px solid #c0392b; }
+    .alert.yellow { background: #fff3cd; color: #7a5b00; border-left: 4px solid #d4a017; }
+    .alert.green { background: #d4f5dd; color: #1e6b3a; border-left: 4px solid #2e9c5e; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { padding: 6px 8px; text-align: right; border-bottom: 1px solid #ececef; }
+    th:first-child, td:first-child { text-align: left; }
+    th { background: #f0f0f3; font-weight: 600; }
+    .pos { color: #1e6b3a; }
+    .neg { color: #c0392b; }
+    code { background: #f0f0f3; padding: 1px 4px; border-radius: 3px; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <h1>Pipeline Reporting Dashboard</h1>
+  <div class="subtitle" id="subtitle">Loading…</div>
+
+  <div class="panel" id="panel-alerts">
+    <h2>Alerts</h2>
+    <div class="alerts" id="alerts-container"></div>
+  </div>
+
+  <div class="panel" id="panel-funnel">
+    <h2>Full Funnel by Channel × Week</h2>
+    <div class="alerts" id="alerts-funnel"></div>
+    <div id="funnel-table"></div>
+  </div>
+
+  <div class="panel" id="panel-roi">
+    <h2>ROI Leaderboard</h2>
+    <div class="alerts" id="alerts-roi"></div>
+    <div id="roi-table"></div>
+  </div>
+
+  <script id="dashboard-data" type="application/json">
+  /* DASHBOARD_DATA_START */
+  {
+    "generated_at": "PLACEHOLDER",
+    "rows": [],
+    "alerts": []
+  }
+  /* DASHBOARD_DATA_END */
+  </script>
+
+  <script>
+    const raw = document.getElementById('dashboard-data').textContent;
+    const json = raw.replace(/\/\* DASHBOARD_DATA_START \*\//, '').replace(/\/\* DASHBOARD_DATA_END \*\//, '').trim();
+    const data = JSON.parse(json);
+
+    document.getElementById('subtitle').textContent = 'Generated at ' + data.generated_at;
+
+    function pct(x) { if (x === null || x === undefined) return '—'; return (x*100).toFixed(1) + '%'; }
+    function num(x) { if (x === null || x === undefined) return '—'; return Number(x).toLocaleString(); }
+    function money(x) { if (x === null || x === undefined) return '—'; return '$' + Number(x).toLocaleString(undefined, {maximumFractionDigits: 0}); }
+    function delta(x) { if (x === null || x === undefined) return '—'; const cls = x >= 0 ? 'pos' : 'neg'; return '<span class="'+cls+'">' + (x*100).toFixed(1) + '%</span>'; }
+
+    function renderAlerts(containerId, alerts, severities) {
+      const c = document.getElementById(containerId);
+      c.innerHTML = '';
+      alerts.filter(a => severities.includes(a.severity)).forEach(a => {
+        const d = document.createElement('div');
+        d.className = 'alert ' + a.severity;
+        d.textContent = '[' + a.severity.toUpperCase() + '] ' + a.message;
+        c.appendChild(d);
+      });
+    }
+
+    renderAlerts('alerts-container', data.alerts, ['red', 'yellow', 'green']);
+    renderAlerts('alerts-funnel', data.alerts, ['red', 'yellow']);
+    renderAlerts('alerts-roi', data.alerts.filter(a => a.metric === 'ROI'), ['green']);
+
+    function renderFunnelTable() {
+      const cols = ['channel','week','spend','leads','mqls','s1','s2','cw','CpCW','ROI','spend_wow_delta'];
+      const headers = ['Channel','Week','Spend','Leads','MQLs','S1','S2','CW','CpCW','ROI','Spend WoW'];
+      const rows = data.rows.map(r => `<tr>
+        <td>${r.channel ?? ''}</td>
+        <td>${r.week ?? ''}</td>
+        <td>${money(r.spend)}</td>
+        <td>${num(r.leads)}</td>
+        <td>${num(r.mqls)}</td>
+        <td>${num(r.s1)}</td>
+        <td>${num(r.s2)}</td>
+        <td>${num(r.cw)}</td>
+        <td>${money(r.CpCW)}</td>
+        <td>${r.ROI === null || r.ROI === undefined ? '—' : Number(r.ROI).toFixed(2) + 'x'}</td>
+        <td>${delta(r.spend_wow_delta)}</td>
+      </tr>`).join('');
+      document.getElementById('funnel-table').innerHTML =
+        `<table><thead><tr>${headers.map(h=>'<th>'+h+'</th>').join('')}</tr></thead><tbody>${rows}</tbody></table>`;
+    }
+
+    function renderRoiTable() {
+      const sorted = [...data.rows].filter(r => r.ROI !== null && r.ROI !== undefined).sort((a,b)=>b.ROI - a.ROI).slice(0,10);
+      const rows = sorted.map(r => `<tr>
+        <td>${r.channel}</td>
+        <td>${r.week}</td>
+        <td>${money(r.spend)}</td>
+        <td>${money(r.arr ?? null)}</td>
+        <td>${Number(r.ROI).toFixed(2)}x</td>
+      </tr>`).join('');
+      document.getElementById('roi-table').innerHTML =
+        `<table><thead><tr><th>Channel</th><th>Week</th><th>Spend</th><th>ARR</th><th>ROI</th></tr></thead><tbody>${rows}</tbody></table>`;
+    }
+
+    renderFunnelTable();
+    renderRoiTable();
+  </script>
+</body>
+</html>

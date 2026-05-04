@@ -1,0 +1,293 @@
+"""Refresh dashboard.html, write weekly_report.md, and post Slack summary."""
+from __future__ import annotations
+
+import json
+import re
+import sys
+from datetime import datetime, timezone, timedelta
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+import requests
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _common import OUTPUT, PROCESSED, env, get_logger, utc_now_iso
+
+log = get_logger("output")
+
+FUNNEL_PATH = PROCESSED / "full_funnel_with_deltas.csv"
+ALERTS_PATH = PROCESSED / "alerts.json"
+DASHBOARD_PATH = OUTPUT / "dashboard.html"
+REPORT_PATH = OUTPUT / "weekly_report.md"
+
+MONTHLY_TARGETS = {
+    "leads": 4000,
+    "mqls": 800,
+    "s1": 400,
+    "s2": 200,
+    "cw": 40,
+    "arr": 500_000,
+}
+
+DASHBOARD_DATA_RE = re.compile(
+    r"/\* DASHBOARD_DATA_START \*/.*?/\* DASHBOARD_DATA_END \*/",
+    re.DOTALL,
+)
+
+
+def _df_to_records(df: pd.DataFrame) -> list[dict]:
+    if df.empty:
+        return []
+    out = df.where(pd.notna(df), None).to_dict(orient="records")
+    cleaned = []
+    for row in out:
+        clean = {}
+        for k, v in row.items():
+            if isinstance(v, float) and (np.isnan(v) or np.isinf(v)):
+                clean[k] = None
+            elif isinstance(v, (np.integer,)):
+                clean[k] = int(v)
+            elif isinstance(v, (np.floating,)):
+                clean[k] = float(v)
+            else:
+                clean[k] = v
+        cleaned.append(clean)
+    return cleaned
+
+
+def refresh_dashboard(df: pd.DataFrame, alerts: list[dict]):
+    if not DASHBOARD_PATH.exists():
+        log.warning(f"Dashboard template missing at {DASHBOARD_PATH}; skipping refresh")
+        return
+
+    html = DASHBOARD_PATH.read_text()
+    payload = {
+        "generated_at": utc_now_iso(),
+        "rows": _df_to_records(df),
+        "alerts": alerts,
+    }
+    block = "/* DASHBOARD_DATA_START */\n" + json.dumps(payload, indent=2, default=str) + "\n/* DASHBOARD_DATA_END */"
+
+    if DASHBOARD_DATA_RE.search(html):
+        html = DASHBOARD_DATA_RE.sub(lambda _m: block, html)
+    else:
+        log.warning("Dashboard markers not found; appending data script")
+        html = html.replace(
+            "</body>",
+            f'<script id="dashboard-data" type="application/json">{block}</script></body>',
+        )
+    DASHBOARD_PATH.write_text(html)
+    log.info(f"Refreshed {DASHBOARD_PATH}")
+
+
+def _latest_week(df: pd.DataFrame) -> pd.DataFrame:
+    if df.empty:
+        return df
+    df = df.copy()
+    df["week_dt"] = pd.to_datetime(df["week"], errors="coerce")
+    max_w = df["week_dt"].max()
+    return df[df["week_dt"] == max_w].drop(columns=["week_dt"])
+
+
+def _date_range_label(df: pd.DataFrame) -> str:
+    if df.empty:
+        today = datetime.now(timezone.utc).date()
+        return f"{(today - timedelta(days=7)).isoformat()} to {today.isoformat()}"
+    weeks = pd.to_datetime(df["week"], errors="coerce").dropna()
+    if weeks.empty:
+        today = datetime.now(timezone.utc).date()
+        return f"{(today - timedelta(days=7)).isoformat()} to {today.isoformat()}"
+    end = weeks.max().date()
+    start = end - timedelta(days=6)
+    return f"{start.isoformat()} to {end.isoformat()}"
+
+
+def _fmt_money(v):
+    if v is None or pd.isna(v):
+        return "—"
+    return f"${v:,.0f}"
+
+
+def _fmt_pct(v):
+    if v is None or pd.isna(v):
+        return "—"
+    return f"{v*100:+.1f}%"
+
+
+def _fmt_num(v):
+    if v is None or pd.isna(v):
+        return "—"
+    return f"{int(v):,}"
+
+
+def _fmt_x(v):
+    if v is None or pd.isna(v):
+        return "—"
+    return f"{v:.2f}x"
+
+
+def build_report(df: pd.DataFrame, alerts: list[dict]) -> str:
+    label = _date_range_label(df)
+    lines = [f"# Weekly Pipeline Report — {label}", ""]
+
+    lines.append("## Alerts")
+    flagged = [a for a in alerts if a["severity"] in ("red", "yellow")]
+    if not flagged:
+        lines.append("No red or yellow alerts this week.")
+    else:
+        for a in flagged:
+            lines.append(f"- **[{a['severity'].upper()}]** {a['message']}")
+    lines.append("")
+
+    lines.append("## Full Funnel Summary")
+    latest = _latest_week(df)
+    if latest.empty:
+        lines.append("_No data available._")
+    else:
+        lines.append("| channel | spend | leads | mqls | s1 | s2 | cw | cpcw | roi | wow_delta |")
+        lines.append("|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|")
+        for _, r in latest.sort_values("spend", ascending=False).iterrows():
+            lines.append(
+                f"| {r.get('channel','')} | {_fmt_money(r.get('spend'))} | "
+                f"{_fmt_num(r.get('leads'))} | {_fmt_num(r.get('mqls'))} | "
+                f"{_fmt_num(r.get('s1'))} | {_fmt_num(r.get('s2'))} | {_fmt_num(r.get('cw'))} | "
+                f"{_fmt_money(r.get('CpCW'))} | {_fmt_x(r.get('ROI'))} | "
+                f"{_fmt_pct(r.get('spend_wow_delta'))} |"
+            )
+    lines.append("")
+
+    lines.append("## Top Performing Channels")
+    if not latest.empty and "ROI" in latest.columns:
+        top = latest.dropna(subset=["ROI"]).sort_values("ROI", ascending=False).head(3)
+        if top.empty:
+            lines.append("_No ROI data this week._")
+        else:
+            for _, r in top.iterrows():
+                lines.append(f"- **{r['channel']}** — ROI {_fmt_x(r.get('ROI'))} on "
+                             f"{_fmt_money(r.get('spend'))} spend, {_fmt_num(r.get('cw'))} closed-won.")
+    lines.append("")
+
+    lines.append("## Channels Needing Attention")
+    red_channels = {a["channel"] for a in alerts if a["severity"] == "red" and a["channel"] != "ALL"}
+    if not red_channels:
+        lines.append("None.")
+    else:
+        for ch in sorted(red_channels):
+            msgs = [a["message"] for a in alerts if a["severity"] == "red" and a["channel"] == ch]
+            lines.append(f"- **{ch}** — {msgs[0]}")
+    lines.append("")
+
+    lines.append("## Pacing vs Target")
+    lines.append("| stage | actual_mtd | target | pacing_pct | status |")
+    lines.append("|---|---:|---:|---:|---|")
+    if df.empty:
+        for stage in ["leads", "mqls", "s1", "s2", "cw", "arr"]:
+            target = MONTHLY_TARGETS.get(stage, 0)
+            lines.append(f"| {stage} | 0 | {target:,} | — | n/a |")
+    else:
+        df2 = df.copy()
+        df2["week_dt"] = pd.to_datetime(df2["week"], errors="coerce")
+        current_month = df2["week_dt"].max().to_period("M")
+        mtd = df2[df2["week_dt"].dt.to_period("M") == current_month]
+        for stage in ["leads", "mqls", "s1", "s2", "cw", "arr"]:
+            actual = float(mtd[stage].sum()) if stage in mtd.columns else 0.0
+            target = MONTHLY_TARGETS.get(stage, 0)
+            pct_val = actual / target if target else None
+            status = "on track" if pct_val and pct_val >= 0.9 else "behind" if pct_val is not None else "n/a"
+            actual_str = f"${actual:,.0f}" if stage == "arr" else f"{int(actual):,}"
+            target_str = f"${target:,}" if stage == "arr" else f"{target:,}"
+            pct_str = f"{pct_val*100:.0f}%" if pct_val is not None else "—"
+            lines.append(f"| {stage} | {actual_str} | {target_str} | {pct_str} | {status} |")
+    lines.append("")
+
+    lines.append("## Recommended Actions")
+    actions = []
+    for a in alerts:
+        if a["severity"] == "red" and a["metric"] == "CpCW":
+            actions.append(f"- Pause or rebudget {a['channel']}: CpCW is {_fmt_pct(a['delta'])} WoW. Investigate creative and bidding.")
+        if a["severity"] == "red" and a["metric"] in CONVERSION_DROP_METRICS:
+            actions.append(f"- Investigate {a['metric']} drop on {a['channel']} ({_fmt_pct(a['delta'])} WoW). Check landing page and lead routing.")
+        if a["severity"] == "red" and a["metric"] == "spend":
+            actions.append(f"- Review pacing on {a['channel']}: spend up {_fmt_pct(a['delta'])} without lead lift. Consider capping daily budget.")
+        if a["severity"] == "green" and a["metric"] == "ROI":
+            actions.append(f"- Increase budget on {a['channel']} (ROI {a['current_value']:.1f}x) — strongest performer.")
+    if not actions:
+        actions = ["- No urgent alerts — continue monitoring next week."]
+    lines.extend(actions[:5])
+    lines.append("")
+
+    return "\n".join(lines)
+
+
+CONVERSION_DROP_METRICS = {"Lead_CVR", "MQL_S1_rate", "S1_S2_rate"}
+
+
+def send_slack(df: pd.DataFrame, alerts: list[dict]):
+    webhook = env("SLACK_WEBHOOK_URL")
+    if not webhook:
+        log.warning("SLACK_WEBHOOK_URL not set; skipping Slack notification")
+        return False
+    label = _date_range_label(df)
+    red_alerts = [a for a in alerts if a["severity"] == "red"]
+    latest = _latest_week(df)
+    top_channel = "n/a"
+    if not latest.empty and "ROI" in latest.columns:
+        top = latest.dropna(subset=["ROI"]).sort_values("ROI", ascending=False).head(1)
+        if not top.empty:
+            top_channel = f"{top.iloc[0]['channel']} ({_fmt_x(top.iloc[0]['ROI'])})"
+
+    text_lines = [
+        f"*Weekly Pipeline Report — {label}*",
+        f"Red alerts: {len(red_alerts)}",
+    ]
+    for a in red_alerts[:5]:
+        text_lines.append(f"  • {a['message']}")
+    text_lines.append(f"Top channel by ROI: {top_channel}")
+
+    if not df.empty:
+        df2 = df.copy()
+        df2["week_dt"] = pd.to_datetime(df2["week"], errors="coerce")
+        current_month = df2["week_dt"].max().to_period("M")
+        mtd = df2[df2["week_dt"].dt.to_period("M") == current_month]
+        s1 = int(mtd["s1"].sum()) if "s1" in mtd.columns else 0
+        cw = int(mtd["cw"].sum()) if "cw" in mtd.columns else 0
+        s1_pct = s1 / MONTHLY_TARGETS["s1"] if MONTHLY_TARGETS["s1"] else 0
+        cw_pct = cw / MONTHLY_TARGETS["cw"] if MONTHLY_TARGETS["cw"] else 0
+        text_lines.append(f"Pacing: S1 {s1}/{MONTHLY_TARGETS['s1']} ({s1_pct*100:.0f}%), CW {cw}/{MONTHLY_TARGETS['cw']} ({cw_pct*100:.0f}%)")
+    text_lines.append("Full report: output/weekly_report.md")
+
+    payload = {"text": "\n".join(text_lines)}
+    try:
+        r = requests.post(webhook, json=payload, timeout=15)
+        r.raise_for_status()
+        log.info("Slack notification sent")
+        return True
+    except Exception as e:
+        log.error(f"Slack post failed: {e}")
+        return False
+
+
+def run():
+    log.info("Starting output stage")
+    try:
+        df = pd.read_csv(FUNNEL_PATH) if FUNNEL_PATH.exists() else pd.DataFrame()
+    except pd.errors.EmptyDataError:
+        df = pd.DataFrame()
+    try:
+        alerts = json.loads(ALERTS_PATH.read_text()) if ALERTS_PATH.exists() else []
+    except Exception:
+        alerts = []
+
+    refresh_dashboard(df, alerts)
+
+    report = build_report(df, alerts)
+    REPORT_PATH.write_text(report)
+    log.info(f"Wrote {REPORT_PATH}")
+
+    send_slack(df, alerts)
+    return True
+
+
+if __name__ == "__main__":
+    run()

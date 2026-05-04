@@ -1,0 +1,13 @@
+google-ads
+facebook-business
+linkedin-api
+twitter-ads
+bingads
+tiktok-business-api-sdk
+hubspot-api-client
+requests
+pandas
+numpy
+python-dotenv
+slack-sdk
+jinja2

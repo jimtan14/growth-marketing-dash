@@ -6034,13 +6034,17 @@
     container.innerHTML = '';
     opts.forEach(v => {
       const lbl = document.createElement('label');
-      lbl.style.cssText = 'display:flex; align-items:center; gap:5px; font-size:12px; font-weight:400; text-transform:none; letter-spacing:0; color:var(--text-primary); cursor:pointer; white-space:nowrap;';
+      lbl.style.cssText = 'display:flex; align-items:center; justify-content:flex-start; width:100%; gap:8px; font-size:12px; font-weight:400; text-transform:none; letter-spacing:0; color:var(--text-primary); cursor:pointer; white-space:nowrap; text-align:left;';
       const cb = document.createElement('input');
       cb.type = 'checkbox';
       cb.name = name;
       cb.value = v;
+      cb.style.cssText = 'flex:0 0 auto; margin:0;';
       lbl.appendChild(cb);
-      lbl.appendChild(document.createTextNode(' ' + v));
+      const span = document.createElement('span');
+      span.textContent = v;
+      span.style.cssText = 'flex:1; text-align:left;';
+      lbl.appendChild(span);
       container.appendChild(lbl);
     });
   }

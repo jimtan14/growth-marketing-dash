@@ -206,6 +206,13 @@
 
 <div class="filter-bar">
   <div class="field">
+    <label for="filter-groupby">Grouped By</label>
+    <select id="filter-groupby">
+      <option value="create_date">Create Date</option>
+      <option value="event_date">Event Date</option>
+    </select>
+  </div>
+  <div class="field">
     <label for="filter-from">From</label>
     <input type="date" id="filter-from">
   </div>
@@ -225,13 +232,6 @@
     <label for="filter-subchannel">Deal Sub-Channel</label>
     <select id="filter-subchannel" multiple></select>
   </div>
-  <div class="field">
-    <label for="filter-groupby">Grouped By</label>
-    <select id="filter-groupby">
-      <option value="create_date">Create Date</option>
-      <option value="event_date">Event Date</option>
-    </select>
-  </div>
   <button class="reset-btn" id="filter-reset">Reset</button>
 </div>
 
@@ -247,10 +247,11 @@
 <div class="kpi-grid">
   <div class="kpi"><div class="v" id="kpi-ctr">—</div><div class="l">CTR</div></div>
   <div class="kpi"><div class="v" id="kpi-mqlcvr">—</div><div class="l">MQL CVR</div></div>
-  <div class="kpi"><div class="v" id="kpi-mqldemo">—</div><div class="l">MQL → Demo</div></div>
-  <div class="kpi"><div class="v" id="kpi-cpmql">—</div><div class="l">Cost / MQL</div></div>
-  <div class="kpi"><div class="v" id="kpi-cpdemo">—</div><div class="l">Cost / Demo</div></div>
-  <div class="kpi"><div class="v" id="kpi-cac">—</div><div class="l">CAC : Oppty Pipeline</div></div>
+  <div class="kpi"><div class="v" id="kpi-mqldemo">—</div><div class="l">MQL → S1 CVR</div></div>
+  <div class="kpi"><div class="v" id="kpi-s1s2">—</div><div class="l">S1 → S2 CVR</div></div>
+  <div class="kpi"><div class="v" id="kpi-cpmql">—</div><div class="l">CP MQL</div></div>
+  <div class="kpi"><div class="v" id="kpi-cpdemo">—</div><div class="l">CPS2</div></div>
+  <div class="kpi"><div class="v" id="kpi-cac">—</div><div class="l">CPS1</div></div>
 </div>
 
 <div class="table-card">
@@ -260,9 +261,44 @@
 </div>
 
 <div class="table-card">
-  <h2>Sub-channel detail</h2>
-  <div class="sub">Channel × sub-channel × week within selected filters.</div>
+  <h2>Channel × time pivot</h2>
+  <div class="sub" style="display:flex; gap:14px; align-items:end; flex-wrap:wrap; margin-bottom: 16px;">
+    <div class="field">
+      <label for="pivot-metric">Metric</label>
+      <select id="pivot-metric" style="padding:8px 10px; border:1px solid var(--stroke-primary); border-radius:7px; font-size:13px;">
+        <option value="spend">Cost</option>
+        <option value="impressions">Impressions</option>
+        <option value="clicks">Clicks</option>
+        <option value="mqls" selected>MQL</option>
+        <option value="s1">S1</option>
+        <option value="s2">S2</option>
+        <option value="cw">CW</option>
+        <option value="arr">ARR</option>
+        <option value="MQL_S1">MQL → S1 CVR</option>
+        <option value="S1_S2">S1 → S2 CVR</option>
+        <option value="S2_CW">S2 → CW CVR</option>
+        <option value="ROI">ROI</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="pivot-freq">Frequency</label>
+      <select id="pivot-freq" style="padding:8px 10px; border:1px solid var(--stroke-primary); border-radius:7px; font-size:13px;">
+        <option value="week" selected>Weekly</option>
+        <option value="month">Monthly</option>
+      </select>
+    </div>
+    <div class="field" style="min-width:240px; flex:1;">
+      <label for="pivot-channels">Channels (rows)</label>
+      <select id="pivot-channels" multiple style="padding:8px 10px; border:1px solid var(--stroke-primary); border-radius:7px; font-size:13px; min-height:38px; max-height:110px;"></select>
+    </div>
+  </div>
   <div id="detail-table"></div>
+</div>
+
+<div class="table-card">
+  <h2>Sub-channel detail</h2>
+  <div class="sub">Top rows by spend within selected filters.</div>
+  <div id="subdetail-table"></div>
 </div>
 
 <script id="dashboard-data" type="application/json">
@@ -5926,10 +5962,32 @@
   function pct(x) { if (x === null || x === undefined || Number.isNaN(x)) return '—'; return (x * 100).toFixed(2) + '%'; }
   function delta(x) { if (x === null || x === undefined || Number.isNaN(x)) return '<span class="muted">—</span>'; const cls = x >= 0 ? 'pos' : 'neg'; return '<span class="' + cls + '">' + (x > 0 ? '+' : '') + (x * 100).toFixed(1) + '%</span>'; }
 
+  // Canonical HubSpot taxonomies (deal_channel, deal_source_2024 enums)
+  const HUBSPOT_DEAL_CHANNELS = [
+    'Outbound', 'Event / Conference', 'Affiliate', 'AI Search',
+    'Community / Influencer', 'Direct', 'Email', 'Offline Advertising',
+    'Organic Search', 'Organic Social', 'Paid AI Search', 'Paid Display',
+    'Paid Search', 'Paid Social', 'Referral', 'Other',
+  ];
+  const HUBSPOT_DEAL_SUB_CHANNELS = [
+    'Inbound - Network Referral [Name]', 'Inbound - Customer Referral [Name]',
+    'Inbound - Partner Referral: [Name]', 'Inbound – Partner Co-Marketing',
+    'Inbound - Referral / WOM', 'Inbound - Webinar', 'Inbound - LinkedIn',
+    'Inbound - Affiliate', 'Inbound - Community / Newsletter / Influencer',
+    'Inbound - Content / SEO / LLMs', 'Enablement - Cohort',
+    'Outbound - LinkedIn Dripify Sequence', 'Outbound - Conference',
+    'Outbound - Founder Connection', 'Outbound - Email Sequence',
+    'Outbound - Event/Dinner Program', 'Outbound - GTN LI Outreach',
+    'Product-Led Opp - Intercom', 'Product-Led Opp - Builder Slack',
+    'Product-Led Opp - Email Sequence', 'LLM', 'ChatGPT', 'Bing',
+    'Growth Unhinged', 'Meta', 'Hubspot Automation', 'G2',
+    'Inbound - Other', 'Unknown', 'Phone Call',
+  ];
+
   // Build filter dropdowns
   const allSources = ['Inbound', 'Outbound'];
-  const allChannels = Array.from(new Set(data.rows.map(r => r.deal_channel).filter(Boolean))).sort();
-  const allSubChannels = Array.from(new Set(data.rows.map(r => r.deal_sub_channel).filter(Boolean))).sort();
+  const allChannels = HUBSPOT_DEAL_CHANNELS;
+  const allSubChannels = HUBSPOT_DEAL_SUB_CHANNELS;
   const allWeeks = Array.from(new Set(data.rows.map(r => r.week).filter(Boolean))).sort();
   const minWeek = allWeeks[0];
   const maxWeek = allWeeks[allWeeks.length - 1];
@@ -5944,6 +6002,8 @@
   fillSelect(sourceSel, allSources);
   fillSelect(channelSel, allChannels);
   fillSelect(subSel, allSubChannels);
+  const pivotChanSel = document.getElementById('pivot-channels');
+  if (pivotChanSel) fillSelect(pivotChanSel, allChannels);
 
   const fromInput = document.getElementById('filter-from');
   const toInput = document.getElementById('filter-to');
@@ -5986,10 +6046,11 @@
     t.oppty_pipeline = t.arr; // TODO: sum amount across S1+S2 stages once exposed
     t.CTR = t.impressions ? t.clicks / t.impressions : null;
     t.MQL_CVR = t.clicks ? t.mqls / t.clicks : null;
-    t.MQL_Demo = t.mqls ? t.s2 / t.mqls : null;
+    t.MQL_S1 = t.mqls ? t.s1 / t.mqls : null;
+    t.S1_S2 = t.s1 ? t.s2 / t.s1 : null;
     t.Cost_per_MQL = t.mqls ? t.spend / t.mqls : null;
-    t.Cost_per_Demo = t.s2 ? t.spend / t.s2 : null;
-    t.CAC_Oppty = t.oppty_pipeline ? t.spend / t.oppty_pipeline : null;
+    t.CPS1 = t.s1 ? t.spend / t.s1 : null;
+    t.CPS2 = t.s2 ? t.spend / t.s2 : null;
     return t;
   }
 
@@ -6002,10 +6063,11 @@
     document.getElementById('kpi-oppty').textContent = money(t.oppty_pipeline);
     document.getElementById('kpi-ctr').textContent = pct(t.CTR);
     document.getElementById('kpi-mqlcvr').textContent = pct(t.MQL_CVR);
-    document.getElementById('kpi-mqldemo').textContent = pct(t.MQL_Demo);
+    document.getElementById('kpi-mqldemo').textContent = pct(t.MQL_S1);
+    document.getElementById('kpi-s1s2').textContent = pct(t.S1_S2);
     document.getElementById('kpi-cpmql').textContent = money(t.Cost_per_MQL);
-    document.getElementById('kpi-cpdemo').textContent = money(t.Cost_per_Demo);
-    document.getElementById('kpi-cac').textContent = pct(t.CAC_Oppty);
+    document.getElementById('kpi-cpdemo').textContent = money(t.CPS2);
+    document.getElementById('kpi-cac').textContent = money(t.CPS1);
   }
 
   function aggBy(rows, keyFn) {
@@ -6027,6 +6089,9 @@
     map.forEach(a => {
       a.CTR = a.impressions ? a.clicks / a.impressions : null;
       a.MQL_CVR = a.clicks ? a.mqls / a.clicks : null;
+      a.MQL_S1 = a.mqls ? a.s1 / a.mqls : null;
+      a.S1_S2 = a.s1 ? a.s2 / a.s1 : null;
+      a.S2_CW = a.s2 ? a.cw / a.s2 : null;
       a.MQL_Demo = a.mqls ? a.s2 / a.mqls : null;
       a.Cost_per_MQL = a.mqls ? a.spend / a.mqls : null;
       a.CpCW = a.cw ? a.spend / a.cw : null;
@@ -6035,28 +6100,53 @@
     return Array.from(map.values());
   }
 
+  let funnelSort = { col: 'spend', dir: 'desc' };
   function renderFunnelTable(rows) {
-    const agg = aggBy(rows, r => r.deal_channel || '—').sort((a, b) => b.spend - a.spend);
-    const headers = ['Deal Channel', 'Cost', 'Impr.', 'Clicks', 'CTR', 'MQL', 'MQL CVR', 'Demo', 'CW', 'ROI'];
-    const body = agg.map(r => `<tr>
-      <td>${r.key}</td>
-      <td>${money(r.spend)}</td>
-      <td>${num(r.impressions)}</td>
-      <td>${num(r.clicks)}</td>
-      <td>${pct(r.CTR)}</td>
-      <td>${num(r.mqls)}</td>
-      <td>${pct(r.MQL_CVR)}</td>
-      <td>${num(r.s2)}</td>
-      <td>${num(r.cw)}</td>
-      <td>${r.ROI === null ? '—' : Number(r.ROI).toFixed(2) + 'x'}</td>
-    </tr>`).join('');
+    const agg = aggBy(rows, r => r.deal_channel || '—');
+    const cols = [
+      { key: 'key', label: 'Deal Channel', fmt: v => v, type: 'str' },
+      { key: 'spend', label: 'Cost', fmt: money, type: 'num' },
+      { key: 'impressions', label: 'Impr.', fmt: num, type: 'num' },
+      { key: 'clicks', label: 'Clicks', fmt: num, type: 'num' },
+      { key: 'CTR', label: 'CTR', fmt: pct, type: 'num' },
+      { key: 'mqls', label: 'MQL', fmt: num, type: 'num' },
+      { key: 's1', label: 'S1', fmt: num, type: 'num' },
+      { key: 'MQL_S1', label: 'MQL→S1', fmt: pct, type: 'num' },
+      { key: 's2', label: 'S2', fmt: num, type: 'num' },
+      { key: 'S1_S2', label: 'S1→S2', fmt: pct, type: 'num' },
+      { key: 'cw', label: 'CW', fmt: num, type: 'num' },
+      { key: 'S2_CW', label: 'S2→CW', fmt: pct, type: 'num' },
+      { key: 'ROI', label: 'ROI', fmt: v => v === null ? '—' : Number(v).toFixed(2) + 'x', type: 'num' },
+    ];
+    const sortKey = funnelSort.col;
+    const dir = funnelSort.dir === 'asc' ? 1 : -1;
+    agg.sort((a, b) => {
+      const av = a[sortKey], bv = b[sortKey];
+      if (av === null || av === undefined) return 1;
+      if (bv === null || bv === undefined) return -1;
+      if (typeof av === 'string') return av.localeCompare(bv) * dir;
+      return (av - bv) * dir;
+    });
+    const head = cols.map(c => {
+      const arrow = funnelSort.col === c.key ? (funnelSort.dir === 'asc' ? ' ↑' : ' ↓') : '';
+      return `<th data-col="${c.key}" style="cursor:pointer; user-select:none;">${c.label}${arrow}</th>`;
+    }).join('');
+    const body = agg.map(r => '<tr>' + cols.map(c => `<td>${c.fmt(r[c.key])}</td>`).join('') + '</tr>').join('');
     document.getElementById('funnel-table').innerHTML =
-      `<table><thead><tr>${headers.map(h => '<th>' + h + '</th>').join('')}</tr></thead><tbody>${body || '<tr><td colspan="10" class="muted">No rows match the current filters.</td></tr>'}</tbody></table>`;
+      `<table><thead><tr>${head}</tr></thead><tbody>${body || '<tr><td colspan="13" class="muted">No rows match the current filters.</td></tr>'}</tbody></table>`;
+    document.querySelectorAll('#funnel-table th').forEach(th => {
+      th.addEventListener('click', () => {
+        const c = th.getAttribute('data-col');
+        if (funnelSort.col === c) funnelSort.dir = funnelSort.dir === 'asc' ? 'desc' : 'asc';
+        else { funnelSort.col = c; funnelSort.dir = 'desc'; }
+        renderFunnelTable(rows);
+      });
+    });
   }
 
-  function renderDetailTable(rows) {
+  function renderSubDetailTable(rows) {
     const sorted = [...rows].sort((a, b) => (b.spend || 0) - (a.spend || 0)).slice(0, 60);
-    const headers = ['Deal Channel', 'Sub-Channel', 'Week', 'Cost', 'Clicks', 'MQL', 'Demo', 'CW', 'ROI', 'WoW Spend'];
+    const headers = ['Deal Channel', 'Sub-Channel', 'Week', 'Cost', 'Clicks', 'MQL', 'S1', 'S2', 'CW', 'ROI', 'WoW Spend'];
     const body = sorted.map(r => `<tr>
       <td>${r.deal_channel || '—'}</td>
       <td>${r.deal_sub_channel || '—'}</td>
@@ -6064,13 +6154,73 @@
       <td>${money(r.spend)}</td>
       <td>${num(r.clicks)}</td>
       <td>${num(r.mqls)}</td>
+      <td>${num(r.s1)}</td>
       <td>${num(r.s2)}</td>
       <td>${num(r.cw)}</td>
       <td>${r.ROI === null || r.ROI === undefined ? '—' : Number(r.ROI).toFixed(2) + 'x'}</td>
       <td>${delta(r.spend_wow_delta)}</td>
     </tr>`).join('');
+    document.getElementById('subdetail-table').innerHTML =
+      `<table><thead><tr>${headers.map(h => '<th>' + h + '</th>').join('')}</tr></thead><tbody>${body || '<tr><td colspan="11" class="muted">No rows match the current filters.</td></tr>'}</tbody></table>`;
+  }
+
+  function monthOf(week) { return week ? week.slice(0, 7) : ''; }
+
+  function renderPivotTable(rows) {
+    const metric = document.getElementById('pivot-metric').value;
+    const freq = document.getElementById('pivot-freq').value;
+    const selChannels = Array.from(document.getElementById('pivot-channels').selectedOptions).map(o => o.value);
+    const channels = selChannels.length ? selChannels : Array.from(new Set(rows.map(r => r.deal_channel).filter(Boolean))).sort();
+    const periods = Array.from(new Set(rows.map(r => freq === 'month' ? monthOf(r.week) : r.week).filter(Boolean))).sort();
+    if (!periods.length || !channels.length) {
+      document.getElementById('detail-table').innerHTML = '<div class="muted">No rows match the current filters.</div>';
+      return;
+    }
+    const cells = new Map();
+    rows.forEach(r => {
+      if (!channels.includes(r.deal_channel)) return;
+      const p = freq === 'month' ? monthOf(r.week) : r.week;
+      const k = r.deal_channel + '||' + p;
+      if (!cells.has(k)) cells.set(k, { impressions: 0, clicks: 0, spend: 0, mqls: 0, s1: 0, s2: 0, cw: 0, arr: 0 });
+      const a = cells.get(k);
+      a.impressions += r.impressions || 0;
+      a.clicks += r.clicks || 0;
+      a.spend += r.spend || 0;
+      a.mqls += r.mqls || 0;
+      a.s1 += r.s1 || 0;
+      a.s2 += r.s2 || 0;
+      a.cw += r.cw || 0;
+      a.arr += r.arr || 0;
+    });
+    function metricVal(c) {
+      if (!c) return null;
+      switch (metric) {
+        case 'MQL_S1': return c.mqls ? c.s1 / c.mqls : null;
+        case 'S1_S2': return c.s1 ? c.s2 / c.s1 : null;
+        case 'S2_CW': return c.s2 ? c.cw / c.s2 : null;
+        case 'ROI': return c.spend ? c.arr / c.spend : null;
+        default: return c[metric] || 0;
+      }
+    }
+    function format(v) {
+      if (v === null || v === undefined) return '—';
+      if (['MQL_S1', 'S1_S2', 'S2_CW'].includes(metric)) return pct(v);
+      if (metric === 'ROI') return Number(v).toFixed(2) + 'x';
+      if (['spend', 'arr'].includes(metric)) return money(v);
+      return num(v);
+    }
+    const head = '<tr><th>Channel</th>' + periods.map(p => '<th>' + p + '</th>').join('') + '<th>Total</th></tr>';
+    const body = channels.map(ch => {
+      let total = { impressions: 0, clicks: 0, spend: 0, mqls: 0, s1: 0, s2: 0, cw: 0, arr: 0 };
+      const tds = periods.map(p => {
+        const c = cells.get(ch + '||' + p);
+        if (c) { ['impressions','clicks','spend','mqls','s1','s2','cw','arr'].forEach(k => total[k] += c[k]); }
+        return '<td>' + format(metricVal(c)) + '</td>';
+      }).join('');
+      return '<tr><td>' + ch + '</td>' + tds + '<td><strong>' + format(metricVal(total)) + '</strong></td></tr>';
+    }).join('');
     document.getElementById('detail-table').innerHTML =
-      `<table><thead><tr>${headers.map(h => '<th>' + h + '</th>').join('')}</tr></thead><tbody>${body || '<tr><td colspan="10" class="muted">No rows match the current filters.</td></tr>'}</tbody></table>`;
+      '<table><thead>' + head + '</thead><tbody>' + body + '</tbody></table>';
   }
 
   function rerender() {
@@ -6080,11 +6230,16 @@
       `${rows.length} rows · ${new Set(rows.map(r => r.deal_channel)).size} channels · ${new Set(rows.map(r => r.week)).size} weeks · ${selected(sourceSel).length ? selected(sourceSel).join(', ') : 'All sources'}`;
     renderKPIs(totals(rows));
     renderFunnelTable(rows);
-    renderDetailTable(rows);
+    renderPivotTable(rows);
+    renderSubDetailTable(rows);
   }
 
   ['change', 'input'].forEach(evt => {
-    [fromInput, toInput, sourceSel, channelSel, subSel, document.getElementById('filter-groupby')].forEach(el => el.addEventListener(evt, rerender));
+    [fromInput, toInput, sourceSel, channelSel, subSel,
+     document.getElementById('filter-groupby'),
+     document.getElementById('pivot-metric'),
+     document.getElementById('pivot-freq'),
+     document.getElementById('pivot-channels')].forEach(el => el.addEventListener(evt, rerender));
   });
   document.getElementById('filter-reset').addEventListener('click', () => {
     fromInput.value = minWeek || '';

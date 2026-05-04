@@ -6198,8 +6198,21 @@
       return `<th data-col="${c.key}" style="cursor:pointer; user-select:none;">${c.label}${arrow}</th>`;
     }).join('');
     const body = agg.map(r => '<tr>' + cols.map(c => `<td>${c.fmt(r[c.key])}</td>`).join('') + '</tr>').join('');
+
+    // Totals row across all channels in current view
+    const tot = { key: 'TOTAL', impressions: 0, clicks: 0, spend: 0, leads: 0, mqls: 0, s1: 0, s2: 0, cw: 0, arr: 0 };
+    agg.forEach(r => { ['impressions','clicks','spend','leads','mqls','s1','s2','cw','arr'].forEach(k => tot[k] += r[k] || 0); });
+    tot.CTR = tot.impressions ? tot.clicks / tot.impressions : null;
+    tot.Lead_MQL = tot.leads ? tot.mqls / tot.leads : null;
+    tot.MQL_S1 = tot.mqls ? tot.s1 / tot.mqls : null;
+    tot.S1_S2 = tot.s1 ? tot.s2 / tot.s1 : null;
+    tot.S2_CW = tot.s2 ? tot.cw / tot.s2 : null;
+    tot.ROI = tot.spend ? tot.arr / tot.spend : null;
+    const totalsRow = '<tr style="background:var(--green-100); font-weight:600;">' +
+      cols.map(c => `<td style="font-weight:600;">${c.fmt(tot[c.key])}</td>`).join('') + '</tr>';
+
     document.getElementById('funnel-table').innerHTML =
-      `<table><thead><tr>${head}</tr></thead><tbody>${body || '<tr><td colspan="15" class="muted">No rows match the current filters.</td></tr>'}</tbody></table>`;
+      `<table><thead><tr>${head}</tr></thead><tbody>${body || '<tr><td colspan="15" class="muted">No rows match the current filters.</td></tr>'}${agg.length ? totalsRow : ''}</tbody></table>`;
   }
   // Event delegation: one listener attached once that survives innerHTML rewrites
   document.getElementById('funnel-table').addEventListener('click', (e) => {

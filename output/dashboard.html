@@ -214,28 +214,31 @@
   </div>
 </div>
 
-<div class="filter-bar">
-  <div class="field">
+<div class="filter-bar" style="display:flex; gap:14px; align-items:end; margin-bottom:14px; padding:14px 18px;">
+  <div class="field" style="max-width:220px;">
     <label for="filter-from">From</label>
     <input type="date" id="filter-from">
   </div>
-  <div class="field">
+  <div class="field" style="max-width:220px;">
     <label for="filter-to">To</label>
     <input type="date" id="filter-to">
   </div>
-  <div class="field">
+  <div class="field" style="max-width:240px;">
     <label>Source</label>
-    <div id="filter-source" class="checkbox-group" style="display:flex; flex-wrap:wrap; gap:6px 12px; padding:8px 10px; border:1px solid var(--stroke-primary); border-radius:7px; background:#fff; min-height:38px; max-height:120px; overflow-y:auto;"></div>
+    <div id="filter-source" class="checkbox-group" style="display:flex; flex-wrap:wrap; gap:6px 12px; padding:8px 10px; border:1px solid var(--stroke-primary); border-radius:7px; background:#fff; min-height:38px;"></div>
   </div>
+  <button class="reset-btn" id="filter-reset" style="margin-left:auto;">Reset</button>
+</div>
+
+<div class="filter-bar" style="display:grid; grid-template-columns: 1fr 1fr; gap:14px; align-items:start; margin-bottom:18px; padding:14px 18px;">
   <div class="field">
     <label>Deal Channel</label>
-    <div id="filter-channel" class="checkbox-group" style="display:flex; flex-wrap:wrap; gap:6px 12px; padding:8px 10px; border:1px solid var(--stroke-primary); border-radius:7px; background:#fff; min-height:38px; max-height:120px; overflow-y:auto;"></div>
+    <div id="filter-channel" class="checkbox-group" style="display:flex; flex-wrap:wrap; gap:6px 14px; padding:10px 12px; border:1px solid var(--stroke-primary); border-radius:7px; background:#fff; min-height:38px; max-height:140px; overflow-y:auto;"></div>
   </div>
   <div class="field">
     <label>Deal Sub-Channel</label>
-    <div id="filter-subchannel" class="checkbox-group" style="display:flex; flex-wrap:wrap; gap:6px 12px; padding:8px 10px; border:1px solid var(--stroke-primary); border-radius:7px; background:#fff; min-height:38px; max-height:120px; overflow-y:auto;"></div>
+    <div id="filter-subchannel" class="checkbox-group" style="display:flex; flex-wrap:wrap; gap:6px 14px; padding:10px 12px; border:1px solid var(--stroke-primary); border-radius:7px; background:#fff; min-height:38px; max-height:140px; overflow-y:auto;"></div>
   </div>
-  <button class="reset-btn" id="filter-reset">Reset</button>
 </div>
 
 <div class="kpi-grid">

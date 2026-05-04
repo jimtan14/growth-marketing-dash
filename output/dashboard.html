@@ -180,6 +180,33 @@
     .muted { color: var(--text-tertiary); }
     .pos { color: var(--primary-green); font-weight: 500; }
     .neg { color: #c0392b; font-weight: 500; }
+    .checkbox-group label {
+      display: flex !important;
+      align-items: center !important;
+      justify-content: flex-start !important;
+      gap: 8px !important;
+      text-align: left !important;
+      width: 100% !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      font-size: 13px !important;
+      font-weight: 400 !important;
+      text-transform: none !important;
+      letter-spacing: 0 !important;
+      color: var(--text-primary) !important;
+      cursor: pointer !important;
+    }
+    .checkbox-group label > input[type="checkbox"] {
+      flex: 0 0 auto !important;
+      margin: 0 !important;
+    }
+    .checkbox-group label > span {
+      flex: 1 1 auto !important;
+      text-align: left !important;
+      white-space: nowrap !important;
+      overflow: hidden !important;
+      text-overflow: ellipsis !important;
+    }
 
     @media (max-width: 1240px) {
       .filter-bar { grid-template-columns: repeat(3, 1fr); }
@@ -6036,16 +6063,13 @@
     container.innerHTML = '';
     opts.forEach(v => {
       const lbl = document.createElement('label');
-      lbl.style.cssText = 'display:flex; align-items:center; justify-content:flex-start; width:100%; gap:8px; font-size:12px; font-weight:400; text-transform:none; letter-spacing:0; color:var(--text-primary); cursor:pointer; white-space:nowrap; text-align:left;';
       const cb = document.createElement('input');
       cb.type = 'checkbox';
       cb.name = name;
       cb.value = v;
-      cb.style.cssText = 'flex:0 0 auto; margin:0;';
-      lbl.appendChild(cb);
       const span = document.createElement('span');
       span.textContent = v;
-      span.style.cssText = 'flex:1; text-align:left;';
+      lbl.appendChild(cb);
       lbl.appendChild(span);
       container.appendChild(lbl);
     });

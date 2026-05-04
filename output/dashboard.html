@@ -119,7 +119,7 @@
     /* KPI tiles */
     .kpi-grid {
       display: grid;
-      grid-template-columns: repeat(7, 1fr);
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
       gap: 14px;
       margin-bottom: 14px;
     }
@@ -253,6 +253,8 @@
   <div class="kpi"><div class="v" id="kpi-s1s2">—</div><div class="l">S1 → S2 CVR</div></div>
   <div class="kpi"><div class="v" id="kpi-s2cw">—</div><div class="l">S2 → CW CVR</div></div>
   <div class="kpi"><div class="v" id="kpi-cw">—</div><div class="l">CW</div></div>
+  <div class="kpi"><div class="v" id="kpi-s2amt">—</div><div class="l">S2 Deal Amount</div></div>
+  <div class="kpi"><div class="v" id="kpi-cwarr">—</div><div class="l">CW ARR</div></div>
 </div>
 
 <div class="kpi-grid">
@@ -6129,6 +6131,8 @@
     document.getElementById('kpi-s1s2').textContent = pct(t.S1_S2);
     document.getElementById('kpi-s2cw').textContent = pct(t.S2_CW);
     document.getElementById('kpi-cw').textContent = num(t.cw);
+    document.getElementById('kpi-s2amt').textContent = money(t.s2_amount || 0);
+    document.getElementById('kpi-cwarr').textContent = money(t.arr || 0);
     document.getElementById('kpi-cpmql').textContent = money(t.CPMQL);
     document.getElementById('kpi-cps1').textContent = money(t.CPS1);
     document.getElementById('kpi-cps2').textContent = money(t.CPS2);

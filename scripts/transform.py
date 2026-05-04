@@ -1,4 +1,5 @@
-"""Standardize ad CSVs, build pipeline df, join, and compute funnel metrics + deltas."""
+"""Standardize ad CSVs, build pipeline df keyed on HubSpot deal_channel taxonomy,
+join, and compute funnel metrics + WoW/MoM deltas."""
 from __future__ import annotations
 
 import sys
@@ -17,7 +18,27 @@ PIPELINE_OUT = PROCESSED / "pipeline_by_channel.csv"
 FULL_FUNNEL_OUT = PROCESSED / "full_funnel.csv"
 FULL_FUNNEL_DELTAS_OUT = PROCESSED / "full_funnel_with_deltas.csv"
 
-PLATFORM_TO_CHANNEL = {
+# Map ad-platform CSV stems to the HubSpot deal_channel taxonomy.
+PLATFORM_TO_DEAL_CHANNEL = {
+    "google_ads": "Paid Search",
+    "linkedin_ads": "Paid Social",
+    "meta_ads": "Paid Social",
+    "twitter_ads": "Paid Social",
+    "bing_ads": "Paid Search",
+    "tiktok_ads": "Paid Social",
+}
+
+# Manual source -> deal_channel
+MANUAL_TO_DEAL_CHANNEL = {
+    "vibe": "Offline Advertising",
+    "g2": "Paid Display",
+    "community": "Community / Influencer",
+    "influencer": "Community / Influencer",
+    "chatgpt": "Paid AI Search",
+}
+
+# Friendly platform label retained for sub-channel granularity on the spend side.
+PLATFORM_TO_SUB_CHANNEL = {
     "google_ads": "Google Search",
     "linkedin_ads": "LinkedIn",
     "meta_ads": "Meta",
@@ -26,7 +47,7 @@ PLATFORM_TO_CHANNEL = {
     "tiktok_ads": "TikTok",
 }
 
-MANUAL_TO_CHANNEL = {
+MANUAL_TO_SUB_CHANNEL = {
     "vibe": "Vibe CTV",
     "g2": "G2",
     "community": "Community",
@@ -34,21 +55,18 @@ MANUAL_TO_CHANNEL = {
     "chatgpt": "ChatGPT",
 }
 
-TRAFFIC_SOURCE_MAP = {
-    "google": "Google Search", "google_ads": "Google Search", "cpc": "Google Search",
-    "linkedin": "LinkedIn", "linkedin_ads": "LinkedIn",
-    "meta": "Meta", "facebook": "Meta", "instagram": "Meta",
-    "twitter": "Twitter", "x": "Twitter",
-    "bing": "Bing", "bing_ads": "Bing",
-    "tiktok": "TikTok", "tiktok_ads": "TikTok",
-    "vibe": "Vibe CTV", "ctv": "Vibe CTV",
-    "g2": "G2",
-    "community": "Community",
-    "influencer": "Influencer",
-    "chatgpt": "ChatGPT",
-    "organic": "Content/Organic", "seo": "Content/Organic",
-    "direct": "Direct",
-    "other": "Other",
+# HubSpot hs_analytics_source -> deal_channel (used to attribute leads/MQLs).
+ANALYTICS_SOURCE_TO_DEAL_CHANNEL = {
+    "DIRECT_TRAFFIC": "Direct",
+    "ORGANIC_SEARCH": "Organic Search",
+    "PAID_SEARCH": "Paid Search",
+    "PAID_SOCIAL": "Paid Social",
+    "SOCIAL_MEDIA": "Organic Social",
+    "REFERRALS": "Referral",
+    "EMAIL_MARKETING": "Email",
+    "OFFLINE": "Offline Advertising",
+    "OTHER_CAMPAIGNS": "Other",
+    "INTEGRATION": "Other",
 }
 
 S1_KEYWORDS = ["meeting booked", "discovery", "s1"]
@@ -74,35 +92,30 @@ def _read_csv(path: Path) -> pd.DataFrame:
         return pd.DataFrame()
 
 
-def _stamp_channel(df: pd.DataFrame, channel: str) -> pd.DataFrame:
-    if df.empty:
-        return df
-    df = df.copy()
-    df["channel"] = channel
-    return df
-
-
 def build_spend() -> pd.DataFrame:
     parts = []
-    for stem, channel in PLATFORM_TO_CHANNEL.items():
+    for stem, deal_channel in PLATFORM_TO_DEAL_CHANNEL.items():
         df = _read_csv(RAW / f"{stem}.csv")
         if df.empty:
             continue
-        df = _stamp_channel(df, channel)
+        df = df.copy()
+        df["deal_channel"] = deal_channel
+        df["deal_sub_channel"] = PLATFORM_TO_SUB_CHANNEL.get(stem, stem)
         parts.append(df)
 
     manual = _read_csv(RAW / "manual_channels.csv")
     if not manual.empty and "source" in manual.columns:
         manual = manual.copy()
-        manual["channel"] = manual["source"].map(MANUAL_TO_CHANNEL).fillna("Other")
+        manual["deal_channel"] = manual["source"].map(MANUAL_TO_DEAL_CHANNEL).fillna("Other")
+        manual["deal_sub_channel"] = manual["source"].map(MANUAL_TO_SUB_CHANNEL).fillna(manual["source"])
         manual["campaign_id"] = None
         parts.append(manual)
 
+    cols = ["deal_channel", "deal_sub_channel", "campaign_name", "campaign_id",
+            "impressions", "clicks", "spend", "date", "week"]
     if not parts:
-        return pd.DataFrame(columns=["channel", "campaign_name", "campaign_id",
-                                     "impressions", "clicks", "spend", "date", "week"])
+        return pd.DataFrame(columns=cols)
 
-    cols = ["channel", "campaign_name", "campaign_id", "impressions", "clicks", "spend", "date", "week"]
     for p in parts:
         for c in cols:
             if c not in p.columns:
@@ -115,25 +128,6 @@ def build_spend() -> pd.DataFrame:
     spend.to_csv(SPEND_OUT, index=False)
     log.info(f"Wrote {len(spend)} spend rows to {SPEND_OUT}")
     return spend
-
-
-def _normalize_traffic_source(value) -> str:
-    if value is None or (isinstance(value, float) and np.isnan(value)):
-        return "Other"
-    s = str(value).strip().lower()
-    if not s:
-        return "Other"
-    return TRAFFIC_SOURCE_MAP.get(s, s)
-
-
-def _assign_channel(row) -> str:
-    for col in ["airops_original_traffic_source", "utm_source", "hs_analytics_source"]:
-        v = row.get(col)
-        if v is not None and not (isinstance(v, float) and np.isnan(v)) and str(v).strip():
-            mapped = _normalize_traffic_source(v)
-            if mapped:
-                return mapped
-    return "Other"
 
 
 def _classify_deal_stage(stage: str) -> str | None:
@@ -149,108 +143,99 @@ def _classify_deal_stage(stage: str) -> str | None:
     return None
 
 
-def _classify_source(channel: str) -> str:
-    inbound = {"Google Search", "LinkedIn", "Meta", "Twitter", "Bing", "TikTok",
-               "Vibe CTV", "G2", "Community", "Influencer", "ChatGPT",
-               "Content/Organic", "Direct"}
-    return "inbound" if channel in inbound else "outbound"
+def _contact_deal_channel(row) -> str:
+    src = row.get("airops_original_traffic_source")
+    if isinstance(src, str) and src.strip():
+        return src.strip()
+    src = row.get("hs_analytics_source")
+    if isinstance(src, str) and src.strip():
+        return ANALYTICS_SOURCE_TO_DEAL_CHANNEL.get(src.strip().upper(), "Other")
+    return "Other"
 
 
 def build_pipeline() -> pd.DataFrame:
     contacts = _read_csv(RAW / "hubspot_contacts.csv")
     deals = _read_csv(RAW / "hubspot_deals.csv")
 
+    cols = ["deal_channel", "deal_sub_channel", "week", "segment",
+            "leads", "mqls", "s1", "s2", "cw", "arr"]
     if contacts.empty and deals.empty:
-        log.warning("No HubSpot data; pipeline df will be empty")
-        empty = pd.DataFrame(columns=["channel", "week", "segment", "source",
-                                      "leads", "mqls", "s1", "s2", "cw", "arr"])
+        empty = pd.DataFrame(columns=cols)
         empty.to_csv(PIPELINE_OUT, index=False)
         return empty
 
     if not contacts.empty:
-        contacts["channel"] = contacts.apply(_assign_channel, axis=1)
+        contacts = contacts.copy()
+        contacts["deal_channel"] = contacts.apply(_contact_deal_channel, axis=1)
+        contacts["deal_sub_channel"] = "(unattributed)"
         contacts["createdate"] = pd.to_datetime(contacts["createdate"], errors="coerce", utc=True)
         contacts["week"] = contacts["createdate"].dt.tz_convert(None).apply(
             lambda d: week_floor(d) if pd.notna(d) else None
         )
         contacts["segment"] = "Non-ENT"
-        contacts["source"] = contacts["channel"].apply(_classify_source)
         contacts["lifecyclestage"] = contacts.get("lifecyclestage", "").fillna("").astype(str).str.lower()
         contacts["is_lead"] = (contacts["lifecyclestage"] == "lead").astype(int)
         contacts["is_mql"] = (contacts["lifecyclestage"] == "marketingqualifiedlead").astype(int)
 
-        contact_agg = contacts.groupby(["channel", "week", "segment", "source"], dropna=False).agg(
-            leads=("is_lead", "sum"),
-            mqls=("is_mql", "sum"),
-        ).reset_index()
+        contact_agg = contacts.groupby(
+            ["deal_channel", "deal_sub_channel", "week", "segment"], dropna=False
+        ).agg(leads=("is_lead", "sum"), mqls=("is_mql", "sum")).reset_index()
     else:
-        contact_agg = pd.DataFrame(columns=["channel", "week", "segment", "source", "leads", "mqls"])
+        contact_agg = pd.DataFrame(columns=["deal_channel", "deal_sub_channel", "week", "segment", "leads", "mqls"])
 
     if not deals.empty:
+        deals = deals.copy()
         deals["createdate"] = pd.to_datetime(deals["createdate"], errors="coerce", utc=True)
         deals["week"] = deals["createdate"].dt.tz_convert(None).apply(
             lambda d: week_floor(d) if pd.notna(d) else None
         )
         deals["amount"] = pd.to_numeric(deals.get("amount"), errors="coerce").fillna(0)
         deals["funnel_stage"] = deals["dealstage"].apply(_classify_deal_stage)
-        deals["channel"] = deals.get("deal_channel", "").fillna("Other").apply(_normalize_traffic_source)
+        deals["deal_channel"] = deals.get("deal_channel", "Other").fillna("Other")
+        deals["deal_sub_channel"] = deals.get("deal_sub_channel", "Unknown").fillna("Unknown")
         deals["segment"] = deals.get("segment", "Non-ENT").fillna("Non-ENT")
-        deals["source"] = deals["channel"].apply(_classify_source)
 
         deals["is_s1"] = (deals["funnel_stage"] == "s1").astype(int)
         deals["is_s2"] = (deals["funnel_stage"] == "s2").astype(int)
         deals["is_cw"] = (deals["funnel_stage"] == "cw").astype(int)
         deals["cw_amount"] = deals["is_cw"] * deals["amount"]
 
-        deal_agg = deals.groupby(["channel", "week", "segment", "source"], dropna=False).agg(
-            s1=("is_s1", "sum"),
-            s2=("is_s2", "sum"),
-            cw=("is_cw", "sum"),
+        deal_agg = deals.groupby(
+            ["deal_channel", "deal_sub_channel", "week", "segment"], dropna=False
+        ).agg(
+            s1=("is_s1", "sum"), s2=("is_s2", "sum"), cw=("is_cw", "sum"),
             arr=("cw_amount", "sum"),
         ).reset_index()
     else:
-        deal_agg = pd.DataFrame(columns=["channel", "week", "segment", "source", "s1", "s2", "cw", "arr"])
+        deal_agg = pd.DataFrame(columns=["deal_channel", "deal_sub_channel", "week", "segment", "s1", "s2", "cw", "arr"])
 
-    pipeline = contact_agg.merge(deal_agg, on=["channel", "week", "segment", "source"], how="outer")
+    pipeline = contact_agg.merge(
+        deal_agg, on=["deal_channel", "deal_sub_channel", "week", "segment"], how="outer"
+    )
     for col in ["leads", "mqls", "s1", "s2", "cw"]:
-        if col in pipeline.columns:
-            pipeline[col] = pipeline[col].fillna(0).astype(int)
-    if "arr" in pipeline.columns:
-        pipeline["arr"] = pipeline["arr"].fillna(0).round(2)
-
+        pipeline[col] = pd.to_numeric(pipeline.get(col), errors="coerce").fillna(0).astype(int)
+    pipeline["arr"] = pd.to_numeric(pipeline.get("arr"), errors="coerce").fillna(0).round(2)
     pipeline["pulled_at"] = utc_now_iso()
     pipeline.to_csv(PIPELINE_OUT, index=False)
     log.info(f"Wrote {len(pipeline)} pipeline rows to {PIPELINE_OUT}")
     return pipeline
 
 
-def _agg_spend_by_channel_week(spend: pd.DataFrame) -> pd.DataFrame:
-    if spend.empty:
-        return pd.DataFrame(columns=["channel", "week", "impressions", "clicks", "spend"])
-    return spend.groupby(["channel", "week"], dropna=False).agg(
-        impressions=("impressions", "sum"),
-        clicks=("clicks", "sum"),
-        spend=("spend", "sum"),
-    ).reset_index()
-
-
-def _agg_pipeline_by_channel_week(pipeline: pd.DataFrame) -> pd.DataFrame:
-    if pipeline.empty:
-        return pd.DataFrame(columns=["channel", "week", "leads", "mqls", "s1", "s2", "cw", "arr"])
-    return pipeline.groupby(["channel", "week"], dropna=False).agg(
-        leads=("leads", "sum"),
-        mqls=("mqls", "sum"),
-        s1=("s1", "sum"),
-        s2=("s2", "sum"),
-        cw=("cw", "sum"),
-        arr=("arr", "sum"),
-    ).reset_index()
-
-
 def join_full_funnel(spend: pd.DataFrame, pipeline: pd.DataFrame) -> pd.DataFrame:
-    spend_agg = _agg_spend_by_channel_week(spend)
-    pipe_agg = _agg_pipeline_by_channel_week(pipeline)
-    full = spend_agg.merge(pipe_agg, on=["channel", "week"], how="outer")
+    spend_agg = spend.groupby(["deal_channel", "deal_sub_channel", "week"], dropna=False).agg(
+        impressions=("impressions", "sum"), clicks=("clicks", "sum"), spend=("spend", "sum"),
+    ).reset_index() if not spend.empty else pd.DataFrame(
+        columns=["deal_channel", "deal_sub_channel", "week", "impressions", "clicks", "spend"]
+    )
+
+    pipe_agg = pipeline.groupby(["deal_channel", "deal_sub_channel", "week"], dropna=False).agg(
+        leads=("leads", "sum"), mqls=("mqls", "sum"), s1=("s1", "sum"),
+        s2=("s2", "sum"), cw=("cw", "sum"), arr=("arr", "sum"),
+    ).reset_index() if not pipeline.empty else pd.DataFrame(
+        columns=["deal_channel", "deal_sub_channel", "week", "leads", "mqls", "s1", "s2", "cw", "arr"]
+    )
+
+    full = spend_agg.merge(pipe_agg, on=["deal_channel", "deal_sub_channel", "week"], how="outer")
 
     for col in ["impressions", "clicks", "leads", "mqls", "s1", "s2", "cw"]:
         full[col] = pd.to_numeric(full.get(col), errors="coerce").fillna(0).astype(int)
@@ -290,23 +275,22 @@ def add_deltas(full: pd.DataFrame) -> pd.DataFrame:
                "S2_CW_rate", "CPC", "CPL", "CpMQL", "CpS1", "CpS2", "CpCW", "ROI",
                "spend", "leads", "mqls", "s1", "s2", "cw", "arr"]
 
-    full = full.sort_values(["channel", "week_dt"])
+    full = full.sort_values(["deal_channel", "deal_sub_channel", "week_dt"])
+    group_keys = ["deal_channel", "deal_sub_channel"]
     for m in metrics:
-        if m in full.columns:
-            prior = full.groupby("channel")[m].shift(1).astype(float)
-            denom = prior.where(prior != 0, np.nan)
-            full[f"{m}_wow_delta"] = (full[m].astype(float) - prior) / denom
+        prior = full.groupby(group_keys)[m].shift(1).astype(float)
+        denom = prior.where(prior != 0, np.nan)
+        full[f"{m}_wow_delta"] = (full[m].astype(float) - prior) / denom
 
-    monthly = full.groupby(["channel", "month"], dropna=False)[metrics].sum(min_count=1).reset_index()
-    monthly = monthly.sort_values(["channel", "month"])
+    monthly = full.groupby(group_keys + ["month"], dropna=False)[metrics].sum(min_count=1).reset_index()
+    monthly = monthly.sort_values(group_keys + ["month"])
     for m in metrics:
-        prior_m = monthly.groupby("channel")[m].shift(1).astype(float)
+        prior_m = monthly.groupby(group_keys)[m].shift(1).astype(float)
         denom = prior_m.where(prior_m != 0, np.nan)
         monthly[f"{m}_mom_delta"] = (monthly[m].astype(float) - prior_m) / denom
 
-    mom_cols = ["channel", "month"] + [f"{m}_mom_delta" for m in metrics]
-    full = full.merge(monthly[mom_cols], on=["channel", "month"], how="left")
-
+    mom_cols = group_keys + ["month"] + [f"{m}_mom_delta" for m in metrics]
+    full = full.merge(monthly[mom_cols], on=group_keys + ["month"], how="left")
     full = full.drop(columns=["week_dt"])
     full.to_csv(FULL_FUNNEL_DELTAS_OUT, index=False)
     log.info(f"Wrote {len(full)} delta rows to {FULL_FUNNEL_DELTAS_OUT}")

@@ -22,18 +22,14 @@ DASHBOARD_PATH = OUTPUT / "dashboard.html"
 REPORT_PATH = OUTPUT / "weekly_report.md"
 
 MONTHLY_TARGETS = {
-    "leads": 4000,
-    "mqls": 800,
-    "s1": 400,
-    "s2": 200,
-    "cw": 40,
-    "arr": 500_000,
+    "leads": 4000, "mqls": 800, "s1": 400, "s2": 200, "cw": 40, "arr": 500_000,
 }
 
 DASHBOARD_DATA_RE = re.compile(
-    r"/\* DASHBOARD_DATA_START \*/.*?/\* DASHBOARD_DATA_END \*/",
-    re.DOTALL,
+    r"/\* DASHBOARD_DATA_START \*/.*?/\* DASHBOARD_DATA_END \*/", re.DOTALL,
 )
+
+CONVERSION_DROP_METRICS = {"Lead_CVR", "MQL_S1_rate", "S1_S2_rate"}
 
 
 def _df_to_records(df: pd.DataFrame) -> list[dict]:
@@ -103,28 +99,10 @@ def _date_range_label(df: pd.DataFrame) -> str:
     return f"{start.isoformat()} to {end.isoformat()}"
 
 
-def _fmt_money(v):
-    if v is None or pd.isna(v):
-        return "—"
-    return f"${v:,.0f}"
-
-
-def _fmt_pct(v):
-    if v is None or pd.isna(v):
-        return "—"
-    return f"{v*100:+.1f}%"
-
-
-def _fmt_num(v):
-    if v is None or pd.isna(v):
-        return "—"
-    return f"{int(v):,}"
-
-
-def _fmt_x(v):
-    if v is None or pd.isna(v):
-        return "—"
-    return f"{v:.2f}x"
+def _fmt_money(v): return "—" if v is None or pd.isna(v) else f"${v:,.0f}"
+def _fmt_pct(v): return "—" if v is None or pd.isna(v) else f"{v*100:+.1f}%"
+def _fmt_num(v): return "—" if v is None or pd.isna(v) else f"{int(v):,}"
+def _fmt_x(v): return "—" if v is None or pd.isna(v) else f"{v:.2f}x"
 
 
 def build_report(df: pd.DataFrame, alerts: list[dict]) -> str:
@@ -133,11 +111,8 @@ def build_report(df: pd.DataFrame, alerts: list[dict]) -> str:
 
     lines.append("## Alerts")
     flagged = [a for a in alerts if a["severity"] in ("red", "yellow")]
-    if not flagged:
-        lines.append("No red or yellow alerts this week.")
-    else:
-        for a in flagged:
-            lines.append(f"- **[{a['severity'].upper()}]** {a['message']}")
+    lines.append("No red or yellow alerts this week." if not flagged
+                 else "\n".join(f"- **[{a['severity'].upper()}]** {a['message']}" for a in flagged))
     lines.append("")
 
     lines.append("## Full Funnel Summary")
@@ -145,37 +120,22 @@ def build_report(df: pd.DataFrame, alerts: list[dict]) -> str:
     if latest.empty:
         lines.append("_No data available._")
     else:
-        lines.append("| channel | spend | leads | mqls | s1 | s2 | cw | cpcw | roi | wow_delta |")
-        lines.append("|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|")
-        for _, r in latest.sort_values("spend", ascending=False).iterrows():
+        agg = latest.groupby("deal_channel", as_index=False).agg(
+            spend=("spend", "sum"), leads=("leads", "sum"), mqls=("mqls", "sum"),
+            s1=("s1", "sum"), s2=("s2", "sum"), cw=("cw", "sum"),
+            arr=("arr", "sum"),
+        )
+        agg["CpCW"] = agg.apply(lambda r: r["spend"] / r["cw"] if r["cw"] else None, axis=1)
+        agg["ROI"] = agg.apply(lambda r: r["arr"] / r["spend"] if r["spend"] else None, axis=1)
+        lines.append("| deal_channel | spend | leads | mqls | s1 | s2 | cw | cpcw | roi |")
+        lines.append("|---|---:|---:|---:|---:|---:|---:|---:|---:|")
+        for _, r in agg.sort_values("spend", ascending=False).iterrows():
             lines.append(
-                f"| {r.get('channel','')} | {_fmt_money(r.get('spend'))} | "
-                f"{_fmt_num(r.get('leads'))} | {_fmt_num(r.get('mqls'))} | "
-                f"{_fmt_num(r.get('s1'))} | {_fmt_num(r.get('s2'))} | {_fmt_num(r.get('cw'))} | "
-                f"{_fmt_money(r.get('CpCW'))} | {_fmt_x(r.get('ROI'))} | "
-                f"{_fmt_pct(r.get('spend_wow_delta'))} |"
+                f"| {r['deal_channel']} | {_fmt_money(r['spend'])} | "
+                f"{_fmt_num(r['leads'])} | {_fmt_num(r['mqls'])} | "
+                f"{_fmt_num(r['s1'])} | {_fmt_num(r['s2'])} | {_fmt_num(r['cw'])} | "
+                f"{_fmt_money(r['CpCW'])} | {_fmt_x(r['ROI'])} |"
             )
-    lines.append("")
-
-    lines.append("## Top Performing Channels")
-    if not latest.empty and "ROI" in latest.columns:
-        top = latest.dropna(subset=["ROI"]).sort_values("ROI", ascending=False).head(3)
-        if top.empty:
-            lines.append("_No ROI data this week._")
-        else:
-            for _, r in top.iterrows():
-                lines.append(f"- **{r['channel']}** — ROI {_fmt_x(r.get('ROI'))} on "
-                             f"{_fmt_money(r.get('spend'))} spend, {_fmt_num(r.get('cw'))} closed-won.")
-    lines.append("")
-
-    lines.append("## Channels Needing Attention")
-    red_channels = {a["channel"] for a in alerts if a["severity"] == "red" and a["channel"] != "ALL"}
-    if not red_channels:
-        lines.append("None.")
-    else:
-        for ch in sorted(red_channels):
-            msgs = [a["message"] for a in alerts if a["severity"] == "red" and a["channel"] == ch]
-            lines.append(f"- **{ch}** — {msgs[0]}")
     lines.append("")
 
     lines.append("## Pacing vs Target")
@@ -204,23 +164,17 @@ def build_report(df: pd.DataFrame, alerts: list[dict]) -> str:
     lines.append("## Recommended Actions")
     actions = []
     for a in alerts:
+        ch = f"{a['channel']} / {a.get('sub_channel') or ''}".strip(" /")
         if a["severity"] == "red" and a["metric"] == "CpCW":
-            actions.append(f"- Pause or rebudget {a['channel']}: CpCW is {_fmt_pct(a['delta'])} WoW. Investigate creative and bidding.")
+            actions.append(f"- Pause or rebudget {ch}: CpCW {_fmt_pct(a['delta'])} WoW.")
         if a["severity"] == "red" and a["metric"] in CONVERSION_DROP_METRICS:
-            actions.append(f"- Investigate {a['metric']} drop on {a['channel']} ({_fmt_pct(a['delta'])} WoW). Check landing page and lead routing.")
-        if a["severity"] == "red" and a["metric"] == "spend":
-            actions.append(f"- Review pacing on {a['channel']}: spend up {_fmt_pct(a['delta'])} without lead lift. Consider capping daily budget.")
+            actions.append(f"- Investigate {a['metric']} on {ch} ({_fmt_pct(a['delta'])} WoW).")
         if a["severity"] == "green" and a["metric"] == "ROI":
-            actions.append(f"- Increase budget on {a['channel']} (ROI {a['current_value']:.1f}x) — strongest performer.")
+            actions.append(f"- Increase budget on {ch} (ROI {a['current_value']:.1f}x).")
     if not actions:
         actions = ["- No urgent alerts — continue monitoring next week."]
     lines.extend(actions[:5])
-    lines.append("")
-
     return "\n".join(lines)
-
-
-CONVERSION_DROP_METRICS = {"Lead_CVR", "MQL_S1_rate", "S1_S2_rate"}
 
 
 def send_slack(df: pd.DataFrame, alerts: list[dict]):
@@ -230,36 +184,12 @@ def send_slack(df: pd.DataFrame, alerts: list[dict]):
         return False
     label = _date_range_label(df)
     red_alerts = [a for a in alerts if a["severity"] == "red"]
-    latest = _latest_week(df)
-    top_channel = "n/a"
-    if not latest.empty and "ROI" in latest.columns:
-        top = latest.dropna(subset=["ROI"]).sort_values("ROI", ascending=False).head(1)
-        if not top.empty:
-            top_channel = f"{top.iloc[0]['channel']} ({_fmt_x(top.iloc[0]['ROI'])})"
-
-    text_lines = [
-        f"*Weekly Pipeline Report — {label}*",
-        f"Red alerts: {len(red_alerts)}",
-    ]
+    text_lines = [f"*Weekly Pipeline Report — {label}*", f"Red alerts: {len(red_alerts)}"]
     for a in red_alerts[:5]:
         text_lines.append(f"  • {a['message']}")
-    text_lines.append(f"Top channel by ROI: {top_channel}")
-
-    if not df.empty:
-        df2 = df.copy()
-        df2["week_dt"] = pd.to_datetime(df2["week"], errors="coerce")
-        current_month = df2["week_dt"].max().to_period("M")
-        mtd = df2[df2["week_dt"].dt.to_period("M") == current_month]
-        s1 = int(mtd["s1"].sum()) if "s1" in mtd.columns else 0
-        cw = int(mtd["cw"].sum()) if "cw" in mtd.columns else 0
-        s1_pct = s1 / MONTHLY_TARGETS["s1"] if MONTHLY_TARGETS["s1"] else 0
-        cw_pct = cw / MONTHLY_TARGETS["cw"] if MONTHLY_TARGETS["cw"] else 0
-        text_lines.append(f"Pacing: S1 {s1}/{MONTHLY_TARGETS['s1']} ({s1_pct*100:.0f}%), CW {cw}/{MONTHLY_TARGETS['cw']} ({cw_pct*100:.0f}%)")
     text_lines.append("Full report: output/weekly_report.md")
-
-    payload = {"text": "\n".join(text_lines)}
     try:
-        r = requests.post(webhook, json=payload, timeout=15)
+        r = requests.post(webhook, json={"text": "\n".join(text_lines)}, timeout=15)
         r.raise_for_status()
         log.info("Slack notification sent")
         return True
@@ -280,11 +210,8 @@ def run():
         alerts = []
 
     refresh_dashboard(df, alerts)
-
-    report = build_report(df, alerts)
-    REPORT_PATH.write_text(report)
+    REPORT_PATH.write_text(build_report(df, alerts))
     log.info(f"Wrote {REPORT_PATH}")
-
     send_slack(df, alerts)
     return True
 

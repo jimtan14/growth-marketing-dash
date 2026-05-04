@@ -221,16 +221,16 @@
     <input type="date" id="filter-to">
   </div>
   <div class="field">
-    <label for="filter-source">Source</label>
-    <select id="filter-source" multiple></select>
+    <label>Source</label>
+    <div id="filter-source" class="checkbox-group" style="display:flex; flex-wrap:wrap; gap:6px 12px; padding:8px 10px; border:1px solid var(--stroke-primary); border-radius:7px; background:#fff; min-height:38px; max-height:120px; overflow-y:auto;"></div>
   </div>
   <div class="field">
-    <label for="filter-channel">Deal Channel</label>
-    <select id="filter-channel" multiple></select>
+    <label>Deal Channel</label>
+    <div id="filter-channel" class="checkbox-group" style="display:flex; flex-wrap:wrap; gap:6px 12px; padding:8px 10px; border:1px solid var(--stroke-primary); border-radius:7px; background:#fff; min-height:38px; max-height:120px; overflow-y:auto;"></div>
   </div>
   <div class="field">
-    <label for="filter-subchannel">Deal Sub-Channel</label>
-    <select id="filter-subchannel" multiple></select>
+    <label>Deal Sub-Channel</label>
+    <div id="filter-subchannel" class="checkbox-group" style="display:flex; flex-wrap:wrap; gap:6px 12px; padding:8px 10px; border:1px solid var(--stroke-primary); border-radius:7px; background:#fff; min-height:38px; max-height:120px; overflow-y:auto;"></div>
   </div>
   <button class="reset-btn" id="filter-reset">Reset</button>
 </div>
@@ -6015,12 +6015,26 @@
     sel.innerHTML = '';
     opts.forEach(v => { const o = document.createElement('option'); o.value = v; o.textContent = v; sel.appendChild(o); });
   }
+  function fillCheckboxes(container, name, opts) {
+    container.innerHTML = '';
+    opts.forEach(v => {
+      const lbl = document.createElement('label');
+      lbl.style.cssText = 'display:flex; align-items:center; gap:5px; font-size:12px; font-weight:400; text-transform:none; letter-spacing:0; color:var(--text-primary); cursor:pointer; white-space:nowrap;';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.name = name;
+      cb.value = v;
+      lbl.appendChild(cb);
+      lbl.appendChild(document.createTextNode(' ' + v));
+      container.appendChild(lbl);
+    });
+  }
   const sourceSel = document.getElementById('filter-source');
   const channelSel = document.getElementById('filter-channel');
   const subSel = document.getElementById('filter-subchannel');
-  fillSelect(sourceSel, allSources);
-  fillSelect(channelSel, allChannels);
-  fillSelect(subSel, allSubChannels);
+  fillCheckboxes(sourceSel, 'cb-source', allSources);
+  fillCheckboxes(channelSel, 'cb-channel', allChannels);
+  fillCheckboxes(subSel, 'cb-subchannel', allSubChannels);
   const pivotChanSel = document.getElementById('pivot-channels');
   if (pivotChanSel) fillSelect(pivotChanSel, allChannels);
 
@@ -6029,7 +6043,12 @@
   if (minWeek) { fromInput.value = minWeek; fromInput.min = minWeek; fromInput.max = maxWeek; }
   if (maxWeek) { toInput.value = maxWeek; toInput.min = minWeek; toInput.max = maxWeek; }
 
-  function selected(sel) { return Array.from(sel.selectedOptions).map(o => o.value); }
+  function selected(sel) {
+    if (sel && sel.classList && sel.classList.contains('checkbox-group')) {
+      return Array.from(sel.querySelectorAll('input[type="checkbox"]:checked')).map(c => c.value);
+    }
+    return Array.from(sel.selectedOptions).map(o => o.value);
+  }
 
   function getFiltered() {
     const from = fromInput.value;
@@ -6282,16 +6301,19 @@
   }
 
   ['change', 'input'].forEach(evt => {
-    [fromInput, toInput, sourceSel, channelSel, subSel,
+    [fromInput, toInput,
      document.getElementById('filter-groupby'),
-     document.getElementById('pivot-metric'),
      document.getElementById('pivot-freq'),
-     document.getElementById('pivot-channels')].forEach(el => el.addEventListener(evt, rerender));
+     document.getElementById('pivot-channels')].forEach(el => el && el.addEventListener(evt, rerender));
   });
+  // Delegated listeners for checkbox-group filters and pivot metric checkboxes
+  [sourceSel, channelSel, subSel].forEach(c => c.addEventListener('change', rerender));
+  document.querySelectorAll('input[name="pivot-metric"]').forEach(cb => cb.addEventListener('change', rerender));
+
   document.getElementById('filter-reset').addEventListener('click', () => {
     fromInput.value = minWeek || '';
     toInput.value = maxWeek || '';
-    [sourceSel, channelSel, subSel].forEach(s => Array.from(s.options).forEach(o => o.selected = false));
+    [sourceSel, channelSel, subSel].forEach(c => c.querySelectorAll('input[type="checkbox"]').forEach(b => b.checked = false));
     document.getElementById('filter-groupby').value = 'create_date';
     rerender();
   });

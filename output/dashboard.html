@@ -36,7 +36,7 @@
     .mono { font-family: "DM Mono", monospace; }
 
     /* Top bar */
-    .topbar { display: grid; grid-template-columns: 80px 1fr auto; gap: 12px; align-items: center; margin-bottom: 12px; }
+    .topbar { display: grid; grid-template-columns: 80px 1fr; gap: 12px; align-items: center; margin-bottom: 12px; }
     .logo-tile {
       width: 80px; height: 64px;
       background: var(--forest);
@@ -201,7 +201,6 @@
     <img src="https://cdn.airops.com/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6MTc3NzE3NTkzLCJwdXIiOiJibG9iX2lkIn19--e377642a60a472285a3ec5430e5a26157548328c/airops-logo-on-forest.svg" alt="AirOps">
   </div>
   <div class="title-tile" id="title-tile">Growth Marketing Performance Report</div>
-  <div class="date-pill">Date Range: <strong id="date-range">—</strong></div>
 </div>
 
 <div class="filter-bar" style="display:grid; grid-template-columns: 1fr 1fr 1.5fr 1.5fr auto; gap:16px; align-items:start; padding:16px 20px;">
@@ -6229,7 +6228,7 @@
   function renderDrillDown(rows) {
     const drillCh = document.getElementById('drill-channel').value;
     const drillWin = document.getElementById('drill-window').value;
-    const drillRows = rows.filter(r => r.deal_channel === drillCh);
+    const drillRows = drillCh === 'ALL' ? rows : rows.filter(r => r.deal_channel === drillCh);
 
     if (!drillRows.length) {
       document.getElementById('drill-table').innerHTML = '<div class="muted">No rows for this Deal Channel within current filters.</div>';
@@ -6416,7 +6415,6 @@
 
   function rerender() {
     const rows = getFiltered();
-    document.getElementById('date-range').textContent = (fromInput.value || '—') + ' to ' + (toInput.value || '—');
     document.getElementById('funnel-sub').textContent =
       `${rows.length} rows · ${new Set(rows.map(r => r.deal_channel)).size} channels · ${new Set(rows.map(r => r.week)).size} weeks · ${selected(sourceSel).length ? selected(sourceSel).join(', ') : 'All sources'}`;
     renderKPIs(totals(rows));
@@ -6425,9 +6423,9 @@
     renderDrillDown(rows);
   }
 
-  // Populate the drill-down deal-channel selector with HubSpot channels (default to Paid Social)
+  // Populate the drill-down deal-channel selector with ALL + HubSpot channels (default Paid Social)
   const drillSel = document.getElementById('drill-channel');
-  fillSelect(drillSel, allChannels);
+  fillSelect(drillSel, ['ALL', ...allChannels]);
   if (allChannels.includes('Paid Social')) drillSel.value = 'Paid Social';
 
   ['change', 'input'].forEach(evt => {

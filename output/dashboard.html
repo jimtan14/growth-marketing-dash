@@ -249,9 +249,16 @@
   <div class="kpi"><div class="v" id="kpi-mqlcvr">—</div><div class="l">MQL CVR</div></div>
   <div class="kpi"><div class="v" id="kpi-mqldemo">—</div><div class="l">MQL → S1 CVR</div></div>
   <div class="kpi"><div class="v" id="kpi-s1s2">—</div><div class="l">S1 → S2 CVR</div></div>
-  <div class="kpi"><div class="v" id="kpi-cpmql">—</div><div class="l">CP MQL</div></div>
-  <div class="kpi"><div class="v" id="kpi-cpdemo">—</div><div class="l">CPS2</div></div>
-  <div class="kpi"><div class="v" id="kpi-cac">—</div><div class="l">CPS1</div></div>
+  <div class="kpi"><div class="v" id="kpi-s2cw">—</div><div class="l">S2 → CW CVR</div></div>
+  <div class="kpi"><div class="v" id="kpi-cw">—</div><div class="l">CW</div></div>
+</div>
+
+<div class="kpi-grid">
+  <div class="kpi"><div class="v" id="kpi-cpmql">—</div><div class="l">CPMQL</div></div>
+  <div class="kpi"><div class="v" id="kpi-cps1">—</div><div class="l">CPS1</div></div>
+  <div class="kpi"><div class="v" id="kpi-cps2">—</div><div class="l">CPS2</div></div>
+  <div class="kpi"><div class="v" id="kpi-cpcw">—</div><div class="l">CPCW</div></div>
+  <div class="kpi"><div class="v" id="kpi-roi">—</div><div class="l">ROI</div></div>
 </div>
 
 <div class="table-card">
@@ -263,22 +270,22 @@
 <div class="table-card">
   <h2>Channel × time pivot</h2>
   <div class="sub" style="display:flex; gap:14px; align-items:end; flex-wrap:wrap; margin-bottom: 16px;">
-    <div class="field">
-      <label for="pivot-metric">Metric</label>
-      <select id="pivot-metric" style="padding:8px 10px; border:1px solid var(--stroke-primary); border-radius:7px; font-size:13px;">
-        <option value="spend">Cost</option>
-        <option value="impressions">Impressions</option>
-        <option value="clicks">Clicks</option>
-        <option value="mqls" selected>MQL</option>
-        <option value="s1">S1</option>
-        <option value="s2">S2</option>
-        <option value="cw">CW</option>
-        <option value="arr">ARR</option>
-        <option value="MQL_S1">MQL → S1 CVR</option>
-        <option value="S1_S2">S1 → S2 CVR</option>
-        <option value="S2_CW">S2 → CW CVR</option>
-        <option value="ROI">ROI</option>
-      </select>
+    <div class="field" style="min-width:220px;">
+      <label>Metrics (up to 5)</label>
+      <div id="pivot-metric-list" style="display:flex; flex-wrap:wrap; gap:6px 12px; padding:8px 10px; border:1px solid var(--stroke-primary); border-radius:7px; background:#fff; max-height:120px; overflow-y:auto;">
+        <label style="display:flex; align-items:center; gap:5px; font-size:12px; font-weight:400; text-transform:none; letter-spacing:0; color:var(--text-primary); cursor:pointer;"><input type="checkbox" name="pivot-metric" value="spend"> Cost</label>
+        <label style="display:flex; align-items:center; gap:5px; font-size:12px; font-weight:400; text-transform:none; letter-spacing:0; color:var(--text-primary); cursor:pointer;"><input type="checkbox" name="pivot-metric" value="impressions"> Impressions</label>
+        <label style="display:flex; align-items:center; gap:5px; font-size:12px; font-weight:400; text-transform:none; letter-spacing:0; color:var(--text-primary); cursor:pointer;"><input type="checkbox" name="pivot-metric" value="clicks"> Clicks</label>
+        <label style="display:flex; align-items:center; gap:5px; font-size:12px; font-weight:400; text-transform:none; letter-spacing:0; color:var(--text-primary); cursor:pointer;"><input type="checkbox" name="pivot-metric" value="mqls" checked> MQL</label>
+        <label style="display:flex; align-items:center; gap:5px; font-size:12px; font-weight:400; text-transform:none; letter-spacing:0; color:var(--text-primary); cursor:pointer;"><input type="checkbox" name="pivot-metric" value="s1"> S1</label>
+        <label style="display:flex; align-items:center; gap:5px; font-size:12px; font-weight:400; text-transform:none; letter-spacing:0; color:var(--text-primary); cursor:pointer;"><input type="checkbox" name="pivot-metric" value="s2"> S2</label>
+        <label style="display:flex; align-items:center; gap:5px; font-size:12px; font-weight:400; text-transform:none; letter-spacing:0; color:var(--text-primary); cursor:pointer;"><input type="checkbox" name="pivot-metric" value="cw"> CW</label>
+        <label style="display:flex; align-items:center; gap:5px; font-size:12px; font-weight:400; text-transform:none; letter-spacing:0; color:var(--text-primary); cursor:pointer;"><input type="checkbox" name="pivot-metric" value="arr"> ARR</label>
+        <label style="display:flex; align-items:center; gap:5px; font-size:12px; font-weight:400; text-transform:none; letter-spacing:0; color:var(--text-primary); cursor:pointer;"><input type="checkbox" name="pivot-metric" value="MQL_S1"> MQL→S1</label>
+        <label style="display:flex; align-items:center; gap:5px; font-size:12px; font-weight:400; text-transform:none; letter-spacing:0; color:var(--text-primary); cursor:pointer;"><input type="checkbox" name="pivot-metric" value="S1_S2"> S1→S2</label>
+        <label style="display:flex; align-items:center; gap:5px; font-size:12px; font-weight:400; text-transform:none; letter-spacing:0; color:var(--text-primary); cursor:pointer;"><input type="checkbox" name="pivot-metric" value="S2_CW"> S2→CW</label>
+        <label style="display:flex; align-items:center; gap:5px; font-size:12px; font-weight:400; text-transform:none; letter-spacing:0; color:var(--text-primary); cursor:pointer;"><input type="checkbox" name="pivot-metric" value="ROI"> ROI</label>
+      </div>
     </div>
     <div class="field">
       <label for="pivot-freq">Frequency</label>
@@ -5952,8 +5959,20 @@
   const json = raw.replace(/\/\* DASHBOARD_DATA_START \*\//, '').replace(/\/\* DASHBOARD_DATA_END \*\//, '').trim();
   const data = JSON.parse(json);
 
-  // Outbound deals come from deal_channel == "Outbound"; everything else is Inbound.
+  // Canonical HubSpot taxonomies (deal_channel, deal_source_2024 enums).
+  const HUBSPOT_DEAL_CHANNELS_SET = new Set([
+    'Outbound', 'Event / Conference', 'Affiliate', 'AI Search',
+    'Community / Influencer', 'Direct', 'Email', 'Offline Advertising',
+    'Organic Search', 'Organic Social', 'Paid AI Search', 'Paid Display',
+    'Paid Search', 'Paid Social', 'Referral', 'Other',
+  ]);
+
+  // Remap any non-HubSpot deal_channel value to "Other" so the dashboard always
+  // shows the canonical 16-value taxonomy.
   data.rows.forEach(r => {
+    if (!r.deal_channel || !HUBSPOT_DEAL_CHANNELS_SET.has(r.deal_channel)) {
+      r.deal_channel = 'Other';
+    }
     r.source = (r.deal_channel === 'Outbound') ? 'Outbound' : 'Inbound';
   });
 
@@ -6046,11 +6065,15 @@
     t.oppty_pipeline = t.arr; // TODO: sum amount across S1+S2 stages once exposed
     t.CTR = t.impressions ? t.clicks / t.impressions : null;
     t.MQL_CVR = t.clicks ? t.mqls / t.clicks : null;
+    t.Lead_MQL = t.leads ? t.mqls / t.leads : null;
     t.MQL_S1 = t.mqls ? t.s1 / t.mqls : null;
     t.S1_S2 = t.s1 ? t.s2 / t.s1 : null;
-    t.Cost_per_MQL = t.mqls ? t.spend / t.mqls : null;
+    t.S2_CW = t.s2 ? t.cw / t.s2 : null;
+    t.CPMQL = t.mqls ? t.spend / t.mqls : null;
     t.CPS1 = t.s1 ? t.spend / t.s1 : null;
     t.CPS2 = t.s2 ? t.spend / t.s2 : null;
+    t.CPCW = t.cw ? t.spend / t.cw : null;
+    t.ROI = t.spend ? t.arr / t.spend : null;
     return t;
   }
 
@@ -6065,9 +6088,13 @@
     document.getElementById('kpi-mqlcvr').textContent = pct(t.MQL_CVR);
     document.getElementById('kpi-mqldemo').textContent = pct(t.MQL_S1);
     document.getElementById('kpi-s1s2').textContent = pct(t.S1_S2);
-    document.getElementById('kpi-cpmql').textContent = money(t.Cost_per_MQL);
-    document.getElementById('kpi-cpdemo').textContent = money(t.CPS2);
-    document.getElementById('kpi-cac').textContent = money(t.CPS1);
+    document.getElementById('kpi-s2cw').textContent = pct(t.S2_CW);
+    document.getElementById('kpi-cw').textContent = num(t.cw);
+    document.getElementById('kpi-cpmql').textContent = money(t.CPMQL);
+    document.getElementById('kpi-cps1').textContent = money(t.CPS1);
+    document.getElementById('kpi-cps2').textContent = money(t.CPS2);
+    document.getElementById('kpi-cpcw').textContent = money(t.CPCW);
+    document.getElementById('kpi-roi').textContent = t.ROI === null ? '—' : Number(t.ROI).toFixed(2) + 'x';
   }
 
   function aggBy(rows, keyFn) {
@@ -6089,6 +6116,7 @@
     map.forEach(a => {
       a.CTR = a.impressions ? a.clicks / a.impressions : null;
       a.MQL_CVR = a.clicks ? a.mqls / a.clicks : null;
+      a.Lead_MQL = a.leads ? a.mqls / a.leads : null;
       a.MQL_S1 = a.mqls ? a.s1 / a.mqls : null;
       a.S1_S2 = a.s1 ? a.s2 / a.s1 : null;
       a.S2_CW = a.s2 ? a.cw / a.s2 : null;
@@ -6109,6 +6137,8 @@
       { key: 'impressions', label: 'Impr.', fmt: num, type: 'num' },
       { key: 'clicks', label: 'Clicks', fmt: num, type: 'num' },
       { key: 'CTR', label: 'CTR', fmt: pct, type: 'num' },
+      { key: 'leads', label: 'Lead', fmt: num, type: 'num' },
+      { key: 'Lead_MQL', label: 'Lead→MQL', fmt: pct, type: 'num' },
       { key: 'mqls', label: 'MQL', fmt: num, type: 'num' },
       { key: 's1', label: 'S1', fmt: num, type: 'num' },
       { key: 'MQL_S1', label: 'MQL→S1', fmt: pct, type: 'num' },
@@ -6166,16 +6196,45 @@
 
   function monthOf(week) { return week ? week.slice(0, 7) : ''; }
 
+  const METRIC_LABELS = {
+    spend: 'Cost', impressions: 'Impressions', clicks: 'Clicks',
+    mqls: 'MQL', s1: 'S1', s2: 'S2', cw: 'CW', arr: 'ARR',
+    MQL_S1: 'MQL → S1 CVR', S1_S2: 'S1 → S2 CVR', S2_CW: 'S2 → CW CVR', ROI: 'ROI',
+  };
+  function metricVal(c, metric) {
+    if (!c) return null;
+    switch (metric) {
+      case 'MQL_S1': return c.mqls ? c.s1 / c.mqls : null;
+      case 'S1_S2': return c.s1 ? c.s2 / c.s1 : null;
+      case 'S2_CW': return c.s2 ? c.cw / c.s2 : null;
+      case 'ROI': return c.spend ? c.arr / c.spend : null;
+      default: return c[metric] || 0;
+    }
+  }
+  function metricFmt(v, metric) {
+    if (v === null || v === undefined) return '—';
+    if (['MQL_S1', 'S1_S2', 'S2_CW'].includes(metric)) return pct(v);
+    if (metric === 'ROI') return Number(v).toFixed(2) + 'x';
+    if (['spend', 'arr'].includes(metric)) return money(v);
+    return num(v);
+  }
+
   function renderPivotTable(rows) {
-    const metric = document.getElementById('pivot-metric').value;
+    const metricBoxes = Array.from(document.querySelectorAll('input[name="pivot-metric"]:checked')).map(b => b.value);
     const freq = document.getElementById('pivot-freq').value;
     const selChannels = Array.from(document.getElementById('pivot-channels').selectedOptions).map(o => o.value);
     const channels = selChannels.length ? selChannels : Array.from(new Set(rows.map(r => r.deal_channel).filter(Boolean))).sort();
     const periods = Array.from(new Set(rows.map(r => freq === 'month' ? monthOf(r.week) : r.week).filter(Boolean))).sort();
+
+    if (!metricBoxes.length) {
+      document.getElementById('detail-table').innerHTML = '<div class="muted">Select at least one metric.</div>';
+      return;
+    }
     if (!periods.length || !channels.length) {
       document.getElementById('detail-table').innerHTML = '<div class="muted">No rows match the current filters.</div>';
       return;
     }
+
     const cells = new Map();
     rows.forEach(r => {
       if (!channels.includes(r.deal_channel)) return;
@@ -6183,45 +6242,33 @@
       const k = r.deal_channel + '||' + p;
       if (!cells.has(k)) cells.set(k, { impressions: 0, clicks: 0, spend: 0, mqls: 0, s1: 0, s2: 0, cw: 0, arr: 0 });
       const a = cells.get(k);
-      a.impressions += r.impressions || 0;
-      a.clicks += r.clicks || 0;
-      a.spend += r.spend || 0;
-      a.mqls += r.mqls || 0;
-      a.s1 += r.s1 || 0;
-      a.s2 += r.s2 || 0;
-      a.cw += r.cw || 0;
-      a.arr += r.arr || 0;
+      ['impressions','clicks','spend','mqls','s1','s2','cw','arr'].forEach(k => a[k] += r[k] || 0);
     });
-    function metricVal(c) {
-      if (!c) return null;
-      switch (metric) {
-        case 'MQL_S1': return c.mqls ? c.s1 / c.mqls : null;
-        case 'S1_S2': return c.s1 ? c.s2 / c.s1 : null;
-        case 'S2_CW': return c.s2 ? c.cw / c.s2 : null;
-        case 'ROI': return c.spend ? c.arr / c.spend : null;
-        default: return c[metric] || 0;
-      }
-    }
-    function format(v) {
-      if (v === null || v === undefined) return '—';
-      if (['MQL_S1', 'S1_S2', 'S2_CW'].includes(metric)) return pct(v);
-      if (metric === 'ROI') return Number(v).toFixed(2) + 'x';
-      if (['spend', 'arr'].includes(metric)) return money(v);
-      return num(v);
-    }
-    const head = '<tr><th>Channel</th>' + periods.map(p => '<th>' + p + '</th>').join('') + '<th>Total</th></tr>';
-    const body = channels.map(ch => {
-      let total = { impressions: 0, clicks: 0, spend: 0, mqls: 0, s1: 0, s2: 0, cw: 0, arr: 0 };
-      const tds = periods.map(p => {
-        const c = cells.get(ch + '||' + p);
-        if (c) { ['impressions','clicks','spend','mqls','s1','s2','cw','arr'].forEach(k => total[k] += c[k]); }
-        return '<td>' + format(metricVal(c)) + '</td>';
+
+    const tables = metricBoxes.map(metric => {
+      const head = '<tr><th>' + METRIC_LABELS[metric] + ' · Channel</th>' + periods.map(p => '<th>' + p + '</th>').join('') + '<th>Total</th></tr>';
+      const body = channels.map(ch => {
+        let total = { impressions: 0, clicks: 0, spend: 0, mqls: 0, s1: 0, s2: 0, cw: 0, arr: 0 };
+        const tds = periods.map(p => {
+          const c = cells.get(ch + '||' + p);
+          if (c) { ['impressions','clicks','spend','mqls','s1','s2','cw','arr'].forEach(k => total[k] += c[k]); }
+          return '<td>' + metricFmt(metricVal(c, metric), metric) + '</td>';
+        }).join('');
+        return '<tr><td>' + ch + '</td>' + tds + '<td><strong>' + metricFmt(metricVal(total, metric), metric) + '</strong></td></tr>';
       }).join('');
-      return '<tr><td>' + ch + '</td>' + tds + '<td><strong>' + format(metricVal(total)) + '</strong></td></tr>';
+      return '<div style="margin-bottom:18px;"><table><thead>' + head + '</thead><tbody>' + body + '</tbody></table></div>';
     }).join('');
-    document.getElementById('detail-table').innerHTML =
-      '<table><thead>' + head + '</thead><tbody>' + body + '</tbody></table>';
+
+    document.getElementById('detail-table').innerHTML = tables;
   }
+
+  // Enforce max-5 on metric checkboxes
+  document.querySelectorAll('input[name="pivot-metric"]').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const checked = document.querySelectorAll('input[name="pivot-metric"]:checked');
+      if (checked.length > 5) { cb.checked = false; alert('Choose up to 5 metrics.'); }
+    });
+  });
 
   function rerender() {
     const rows = getFiltered();

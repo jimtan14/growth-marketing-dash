@@ -295,17 +295,30 @@
       </select>
     </div>
     <div class="field" style="min-width:240px; flex:1;">
-      <label for="pivot-channels">Channels (rows)</label>
-      <select id="pivot-channels" multiple style="padding:8px 10px; border:1px solid var(--stroke-primary); border-radius:7px; font-size:13px; min-height:38px; max-height:110px;"></select>
+      <label>Channels (rows)</label>
+      <div id="pivot-channels" class="checkbox-group" style="display:flex; flex-wrap:wrap; gap:6px 12px; padding:8px 10px; border:1px solid var(--stroke-primary); border-radius:7px; background:#fff; min-height:38px; max-height:120px; overflow-y:auto;"></div>
     </div>
   </div>
   <div id="detail-table"></div>
 </div>
 
 <div class="table-card">
-  <h2>Sub-channel detail</h2>
-  <div class="sub">Top rows by spend within selected filters.</div>
-  <div id="subdetail-table"></div>
+  <h2>Sub-channel drill-down</h2>
+  <div class="sub" style="display:flex; gap:14px; align-items:end; flex-wrap:wrap; margin-bottom:16px;">
+    <div class="field">
+      <label for="drill-channel">Drill into</label>
+      <select id="drill-channel" style="padding:8px 10px; border:1px solid var(--stroke-primary); border-radius:7px; font-size:13px; min-width:200px;"></select>
+    </div>
+    <div class="field">
+      <label for="drill-window">Compare</label>
+      <select id="drill-window" style="padding:8px 10px; border:1px solid var(--stroke-primary); border-radius:7px; font-size:13px;">
+        <option value="wow">Latest week vs prior week</option>
+        <option value="mom">Latest month vs prior month</option>
+        <option value="all">All weeks aggregated</option>
+      </select>
+    </div>
+  </div>
+  <div id="drill-table"></div>
 </div>
 
 <script id="dashboard-data" type="application/json">
@@ -6036,7 +6049,7 @@
   fillCheckboxes(channelSel, 'cb-channel', allChannels);
   fillCheckboxes(subSel, 'cb-subchannel', allSubChannels);
   const pivotChanSel = document.getElementById('pivot-channels');
-  if (pivotChanSel) fillSelect(pivotChanSel, allChannels);
+  if (pivotChanSel) fillCheckboxes(pivotChanSel, 'cb-pivot-channel', allChannels);
 
   const fromInput = document.getElementById('filter-from');
   const toInput = document.getElementById('filter-to');
@@ -6148,7 +6161,9 @@
   }
 
   let funnelSort = { col: 'spend', dir: 'desc' };
+  let _funnelLastRows = [];
   function renderFunnelTable(rows) {
+    _funnelLastRows = rows;
     const agg = aggBy(rows, r => r.deal_channel || '—');
     const cols = [
       { key: 'key', label: 'Deal Channel', fmt: v => v, type: 'str' },
@@ -6182,35 +6197,128 @@
     }).join('');
     const body = agg.map(r => '<tr>' + cols.map(c => `<td>${c.fmt(r[c.key])}</td>`).join('') + '</tr>').join('');
     document.getElementById('funnel-table').innerHTML =
-      `<table><thead><tr>${head}</tr></thead><tbody>${body || '<tr><td colspan="13" class="muted">No rows match the current filters.</td></tr>'}</tbody></table>`;
-    document.querySelectorAll('#funnel-table th').forEach(th => {
-      th.addEventListener('click', () => {
-        const c = th.getAttribute('data-col');
-        if (funnelSort.col === c) funnelSort.dir = funnelSort.dir === 'asc' ? 'desc' : 'asc';
-        else { funnelSort.col = c; funnelSort.dir = 'desc'; }
-        renderFunnelTable(rows);
-      });
-    });
+      `<table><thead><tr>${head}</tr></thead><tbody>${body || '<tr><td colspan="15" class="muted">No rows match the current filters.</td></tr>'}</tbody></table>`;
   }
+  // Event delegation: one listener attached once that survives innerHTML rewrites
+  document.getElementById('funnel-table').addEventListener('click', (e) => {
+    const th = e.target.closest('th[data-col]');
+    if (!th) return;
+    const c = th.getAttribute('data-col');
+    if (funnelSort.col === c) funnelSort.dir = funnelSort.dir === 'asc' ? 'desc' : 'asc';
+    else { funnelSort.col = c; funnelSort.dir = 'desc'; }
+    renderFunnelTable(_funnelLastRows);
+  });
 
-  function renderSubDetailTable(rows) {
-    const sorted = [...rows].sort((a, b) => (b.spend || 0) - (a.spend || 0)).slice(0, 60);
-    const headers = ['Deal Channel', 'Sub-Channel', 'Week', 'Cost', 'Clicks', 'MQL', 'S1', 'S2', 'CW', 'ROI', 'WoW Spend'];
-    const body = sorted.map(r => `<tr>
-      <td>${r.deal_channel || '—'}</td>
-      <td>${r.deal_sub_channel || '—'}</td>
-      <td class="mono">${r.week || '—'}</td>
-      <td>${money(r.spend)}</td>
-      <td>${num(r.clicks)}</td>
-      <td>${num(r.mqls)}</td>
-      <td>${num(r.s1)}</td>
-      <td>${num(r.s2)}</td>
-      <td>${num(r.cw)}</td>
-      <td>${r.ROI === null || r.ROI === undefined ? '—' : Number(r.ROI).toFixed(2) + 'x'}</td>
-      <td>${delta(r.spend_wow_delta)}</td>
-    </tr>`).join('');
-    document.getElementById('subdetail-table').innerHTML =
-      `<table><thead><tr>${headers.map(h => '<th>' + h + '</th>').join('')}</tr></thead><tbody>${body || '<tr><td colspan="11" class="muted">No rows match the current filters.</td></tr>'}</tbody></table>`;
+  function renderDrillDown(rows) {
+    const drillCh = document.getElementById('drill-channel').value;
+    const drillWin = document.getElementById('drill-window').value;
+    const drillRows = rows.filter(r => r.deal_channel === drillCh);
+
+    if (!drillRows.length) {
+      document.getElementById('drill-table').innerHTML = '<div class="muted">No rows for this Deal Channel within current filters.</div>';
+      return;
+    }
+
+    // Determine current + prior buckets based on drillWin
+    let currentSet, priorSet;
+    if (drillWin === 'all') {
+      currentSet = drillRows;
+      priorSet = [];
+    } else {
+      const periods = Array.from(new Set(drillRows.map(r => drillWin === 'mom' ? monthOf(r.week) : r.week).filter(Boolean))).sort();
+      const cur = periods[periods.length - 1];
+      const prev = periods[periods.length - 2];
+      currentSet = drillRows.filter(r => (drillWin === 'mom' ? monthOf(r.week) : r.week) === cur);
+      priorSet = prev ? drillRows.filter(r => (drillWin === 'mom' ? monthOf(r.week) : r.week) === prev) : [];
+    }
+
+    function aggBySub(set) {
+      const m = new Map();
+      set.forEach(r => {
+        const k = r.deal_sub_channel || '—';
+        if (!m.has(k)) m.set(k, { sub: k, spend: 0, clicks: 0, impressions: 0, mqls: 0, s1: 0, s2: 0, cw: 0, arr: 0 });
+        const a = m.get(k);
+        ['spend', 'clicks', 'impressions', 'mqls', 's1', 's2', 'cw', 'arr'].forEach(kk => a[kk] += r[kk] || 0);
+      });
+      return m;
+    }
+    const cur = aggBySub(currentSet);
+    const prior = aggBySub(priorSet);
+
+    function metricsFor(c) {
+      return {
+        spend: c.spend, clicks: c.clicks, mqls: c.mqls, s1: c.s1, s2: c.s2, cw: c.cw,
+        CTR: c.impressions ? c.clicks / c.impressions : null,
+        Lead_MQL: null, // contacts not segmented by sub-channel
+        MQL_S1: c.mqls ? c.s1 / c.mqls : null,
+        S1_S2: c.s1 ? c.s2 / c.s1 : null,
+        CPMQL: c.mqls ? c.spend / c.mqls : null,
+        CPS1: c.s1 ? c.spend / c.s1 : null,
+        ROI: c.spend ? c.arr / c.spend : null,
+      };
+    }
+    function deltaPct(curV, priorV) {
+      if (curV == null || priorV == null || priorV === 0) return null;
+      return (curV - priorV) / priorV;
+    }
+
+    const subKeys = Array.from(new Set([...cur.keys(), ...prior.keys()])).sort();
+    const headers = drillWin === 'all'
+      ? ['Sub-Channel', 'Cost', 'Clicks', 'MQL', 'S1', 'S2', 'CW', 'CPMQL', 'CPS1', 'MQL→S1', 'S1→S2', 'ROI']
+      : ['Sub-Channel', 'Cost', 'Δ Cost', 'MQL', 'Δ MQL', 'S1', 'Δ S1', 'S2', 'Δ S2', 'CPS1', 'Δ CPS1', 'MQL→S1', 'Δ MQL→S1'];
+
+    const body = subKeys.map(k => {
+      const c = cur.get(k) || { spend: 0, clicks: 0, impressions: 0, mqls: 0, s1: 0, s2: 0, cw: 0, arr: 0 };
+      const p = prior.get(k) || { spend: 0, clicks: 0, impressions: 0, mqls: 0, s1: 0, s2: 0, cw: 0, arr: 0 };
+      const cm = metricsFor(c);
+      const pm = metricsFor(p);
+      if (drillWin === 'all') {
+        return `<tr>
+          <td>${k}</td>
+          <td>${money(cm.spend)}</td>
+          <td>${num(cm.clicks)}</td>
+          <td>${num(cm.mqls)}</td>
+          <td>${num(cm.s1)}</td>
+          <td>${num(cm.s2)}</td>
+          <td>${num(cm.cw)}</td>
+          <td>${money(cm.CPMQL)}</td>
+          <td>${money(cm.CPS1)}</td>
+          <td>${pct(cm.MQL_S1)}</td>
+          <td>${pct(cm.S1_S2)}</td>
+          <td>${cm.ROI === null ? '—' : Number(cm.ROI).toFixed(2) + 'x'}</td>
+        </tr>`;
+      }
+      return `<tr>
+        <td>${k}</td>
+        <td>${money(cm.spend)}</td>
+        <td>${delta(deltaPct(cm.spend, pm.spend))}</td>
+        <td>${num(cm.mqls)}</td>
+        <td>${delta(deltaPct(cm.mqls, pm.mqls))}</td>
+        <td>${num(cm.s1)}</td>
+        <td>${delta(deltaPct(cm.s1, pm.s1))}</td>
+        <td>${num(cm.s2)}</td>
+        <td>${delta(deltaPct(cm.s2, pm.s2))}</td>
+        <td>${money(cm.CPS1)}</td>
+        <td>${delta(deltaPct(cm.CPS1, pm.CPS1))}</td>
+        <td>${pct(cm.MQL_S1)}</td>
+        <td>${delta(deltaPct(cm.MQL_S1, pm.MQL_S1))}</td>
+      </tr>`;
+    }).join('');
+
+    let label = '';
+    if (drillWin === 'wow') {
+      const periods = Array.from(new Set(drillRows.map(r => r.week).filter(Boolean))).sort();
+      label = periods.length >= 2 ? `Latest week ${periods[periods.length-1]} vs ${periods[periods.length-2]}` : `Only ${periods[0] || '—'}`;
+    } else if (drillWin === 'mom') {
+      const periods = Array.from(new Set(drillRows.map(r => monthOf(r.week)).filter(Boolean))).sort();
+      label = periods.length >= 2 ? `Latest month ${periods[periods.length-1]} vs ${periods[periods.length-2]}` : `Only ${periods[0] || '—'}`;
+    } else {
+      label = `All weeks aggregated · ${drillRows.length} rows`;
+    }
+
+    document.getElementById('drill-table').innerHTML =
+      `<div class="muted" style="margin-bottom:8px; font-size:12px;">${drillCh} · ${label}</div>` +
+      `<table><thead><tr>${headers.map(h => '<th>' + h + '</th>').join('')}</tr></thead><tbody>${body}</tbody></table>`;
   }
 
   function monthOf(week) { return week ? week.slice(0, 7) : ''; }
@@ -6241,7 +6349,7 @@
   function renderPivotTable(rows) {
     const metricBoxes = Array.from(document.querySelectorAll('input[name="pivot-metric"]:checked')).map(b => b.value);
     const freq = document.getElementById('pivot-freq').value;
-    const selChannels = Array.from(document.getElementById('pivot-channels').selectedOptions).map(o => o.value);
+    const selChannels = Array.from(document.querySelectorAll('#pivot-channels input[type="checkbox"]:checked')).map(b => b.value);
     const channels = selChannels.length ? selChannels : Array.from(new Set(rows.map(r => r.deal_channel).filter(Boolean))).sort();
     const periods = Array.from(new Set(rows.map(r => freq === 'month' ? monthOf(r.week) : r.week).filter(Boolean))).sort();
 
@@ -6297,17 +6405,23 @@
     renderKPIs(totals(rows));
     renderFunnelTable(rows);
     renderPivotTable(rows);
-    renderSubDetailTable(rows);
+    renderDrillDown(rows);
   }
+
+  // Populate the drill-down deal-channel selector with HubSpot channels (default to Paid Social)
+  const drillSel = document.getElementById('drill-channel');
+  fillSelect(drillSel, allChannels);
+  if (allChannels.includes('Paid Social')) drillSel.value = 'Paid Social';
 
   ['change', 'input'].forEach(evt => {
     [fromInput, toInput,
      document.getElementById('filter-groupby'),
      document.getElementById('pivot-freq'),
-     document.getElementById('pivot-channels')].forEach(el => el && el.addEventListener(evt, rerender));
+     document.getElementById('drill-channel'),
+     document.getElementById('drill-window')].forEach(el => el && el.addEventListener(evt, rerender));
   });
-  // Delegated listeners for checkbox-group filters and pivot metric checkboxes
-  [sourceSel, channelSel, subSel].forEach(c => c.addEventListener('change', rerender));
+  // Delegated listeners for checkbox-group filters and pivot metric/channel checkboxes
+  [sourceSel, channelSel, subSel, document.getElementById('pivot-channels')].forEach(c => c && c.addEventListener('change', rerender));
   document.querySelectorAll('input[name="pivot-metric"]').forEach(cb => cb.addEventListener('change', rerender));
 
   document.getElementById('filter-reset').addEventListener('click', () => {

@@ -204,14 +204,17 @@
   <div class="date-pill">Date Range: <strong id="date-range">—</strong></div>
 </div>
 
-<div class="filter-bar">
-  <div class="field">
+<div class="filter-bar" style="display:flex; gap:14px; align-items:end; margin-bottom:14px; padding:14px 18px;">
+  <div class="field" style="max-width:220px;">
     <label for="filter-groupby">Grouped By</label>
     <select id="filter-groupby">
       <option value="create_date">Create Date</option>
       <option value="event_date">Event Date</option>
     </select>
   </div>
+</div>
+
+<div class="filter-bar">
   <div class="field">
     <label for="filter-from">From</label>
     <input type="date" id="filter-from">

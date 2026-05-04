@@ -182,13 +182,15 @@
     .neg { color: #c0392b; font-weight: 500; }
     .checkbox-group {
       align-items: flex-start !important;
+      direction: ltr !important;
     }
     .checkbox-group label {
       display: block !important;
       text-align: left !important;
+      direction: ltr !important;
       width: 100% !important;
       margin: 0 !important;
-      padding: 0 !important;
+      padding: 4px 0 !important;
       font-size: 13px !important;
       font-weight: 400 !important;
       text-transform: none !important;
@@ -197,9 +199,19 @@
       cursor: pointer !important;
       line-height: 1.4 !important;
     }
-    .checkbox-group label input[type="checkbox"] {
+    /* Override .field input { width: 100% } so checkboxes stay tiny inline-block */
+    .checkbox-group label > input[type="checkbox"] {
+      display: inline-block !important;
+      width: auto !important;
+      height: auto !important;
+      padding: 0 !important;
       margin: 0 8px 0 0 !important;
       vertical-align: middle !important;
+      float: none !important;
+      flex: none !important;
+      box-shadow: none !important;
+      -webkit-appearance: checkbox !important;
+      appearance: checkbox !important;
     }
 
     @media (max-width: 1240px) {
